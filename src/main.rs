@@ -102,7 +102,7 @@ async fn main() {
     // Insert the global data:
     {
         let mut data = client.data.write().await;
-        let store = Store::load();
+        let store = Store::load().unwrap();
         data.insert::<StoreData>(Arc::new(RwLock::new(store)));
     }
 

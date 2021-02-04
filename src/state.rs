@@ -33,6 +33,7 @@ impl Store {
         let mut f = File::open("state.ron").unwrap();
         //Handle the case of no state file, this is reasonable to expect!
         ron::de::from_reader(f)
+    }
 }
 
 // this could be a stable type since i intend to serialise this for disk storage.
@@ -56,4 +57,4 @@ impl StoryData {
             self.author_stats.insert(message.author.clone(), word_stats);
         }
     }
-aving
+}
