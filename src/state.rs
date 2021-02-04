@@ -15,18 +15,18 @@ impl TypeMapKey for StoreData {
 
 #[derive(Debug, Default)]
 pub struct Store {
-    data: HashMap<StoryKey, StoryData>,
+    pub data: HashMap<StoryKey, StoryData>,
 }
 
 pub type StoryKey = (GuildId, ChannelId);
 
-// This could be a stable type since I intend to serialise this for disk storage.
-// This doesn't seem to be an obvious Rust pattern but we could do Ocaml/Sexp style
-// and use an Enum of V0,V1,...
+// this could be a stable type since i intend to serialise this for disk storage.
+// this doesn't seem to be an obvious rust pattern but we could do ocaml/sexp style
+// and use an enum of v0,v1,...
 #[derive(Debug, Default)]
 pub struct StoryData {
-    author_stats: HashMap<User, WordStats>,
-    general_stats: WordStats,
+    pub author_stats: HashMap<User, WordStats>,
+    pub general_stats: WordStats,
 }
 
 impl StoryData {

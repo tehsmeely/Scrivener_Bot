@@ -5,23 +5,23 @@ mod stats;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
-    macros::{command, group},
+    macros::{command, group, hook},
     Args, CommandResult, StandardFramework,
 };
 use serenity::model::channel::Message;
 use serenity::model::prelude::*;
 
 use crate::state::{Store, StoreData, StoryData, StoryKey};
-use log::info;
+use log::{debug, info};
 use serenity::http::Http;
-use serenity::prelude::RwLock;
+use serenity::utils::MessageBuilder;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 #[group]
-#[commands(ping, init_channel)]
+#[commands(ping, init_channel, show_stats)]
 struct General;
 
 struct Handler;
@@ -38,6 +38,7 @@ async fn main() {
     println!("{:#?}", app_info);
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!").on_mention(Some(app_info.id)))
+        .normal_message(on_regular_message)
         .group(&GENERAL_GROUP);
     let mut client = Client::builder(&token)
         .event_handler(Handler)
@@ -54,6 +55,30 @@ async fn main() {
     // start listening for events by starting a single shard
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
+    }
+}
+
+async fn update_stats_if_exist(story_key: StoryKey, ctx: &Context, message: &Message) {
+    let store_lock = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<StoreData>()
+            .expect("Expected StoryData in TypeMap.")
+            .clone()
+    };
+    let mut store = store_lock.write().unwrap();
+    match store.data.get_mut(&story_key) {
+        Some(mut story_data) => story_data.update(message),
+        None => debug!("Message not in a channel that's been initialised"),
+    }
+}
+
+#[hook]
+async fn on_regular_message(ctx: &Context, message: &Message) {
+    //Update a stats if this channel is initialised
+    if let Some(server_id) = message.guild_id {
+        let story_key = (server_id, message.channel_id);
+        update_stats_if_exist(story_key, ctx, message);
     }
 }
 
@@ -80,7 +105,7 @@ async fn actually_init_channel(
                 .clone()
         };
         let store = store_lock.read().unwrap();
-        store.contains_key(&story_key)
+        store.data.contains_key(&story_key)
     };
     if story_data_exists {
         return Err(format!(
@@ -102,7 +127,8 @@ async fn actually_init_channel(
                 .messages(&ctx.http, |get_messages_builder| {
                     get_messages_builder.before(last_msg_id).limit(100)
                 })
-                .await?;
+                .await
+                .unwrap();
             if messages.len() == 0 {
                 break;
             } else {
@@ -128,8 +154,8 @@ async fn actually_init_channel(
                 .expect("Expected StoryData in TypeMap.")
                 .clone()
         };
-        let store = store_lock.write().await;
-        store.insert(&story_key, story_data);
+        let mut store = store_lock.write().unwrap();
+        store.data.insert(story_key, story_data);
     };
 
     Ok(())
@@ -140,7 +166,7 @@ async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
     let reply = if let Some(server_id) = msg.guild_id {
         if let Ok(channel_to_init) = args.single::<String>() {
             if let Some(text_channel) = get_text_channel(ctx, &server_id, &channel_to_init).await {
-                match actually_init_channel(text_channel, ctx) {
+                match actually_init_channel(text_channel, ctx).await {
                     Ok(()) => format!("Story stats initialised for {}", channel_to_init),
                     Err(error_string) => format!("Not initialised: {}", error_string),
                 }
@@ -154,6 +180,75 @@ async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
         String::from("BUG: message had no server id, bot only supports server text channels")
     };
     msg.reply(ctx, reply).await?;
+    Ok(())
+}
+
+async fn get_stats(text_channel: GuildChannel, ctx: &Context) -> String {
+    let story_key: StoryKey = (text_channel.guild_id, text_channel.id);
+    let store_lock = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<StoreData>()
+            .expect("Expected StoryData in TypeMap.")
+            .clone()
+    };
+    let store = store_lock.read().unwrap();
+    match store.data.get(&story_key) {
+        Some(story_data) => {
+            let mut builder = MessageBuilder::new();
+            let base_builder = builder
+                .push("For ")
+                .channel(text_channel.id)
+                .newline()
+                .push_bold_line("General")
+                .push_line_safe(format!(
+                    "Word count: {}",
+                    story_data.general_stats.word_count
+                ));
+            let final_builder =
+                story_data
+                    .author_stats
+                    .iter()
+                    .fold(base_builder, |builder, (author, stats)| {
+                        builder
+                            .newline()
+                            .user(author)
+                            .newline()
+                            .push_line_safe(format!("Word count: {}", stats.word_count))
+                            .push_line_safe(format!("Top words: {}", stats.top_words(5)))
+                    });
+            final_builder.build()
+        }
+
+        None => format!("Channel not initialised, call [init-channel] to add it"),
+    }
+}
+
+#[command("show-stats")]
+async fn show_stats(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let reply = if let Some(server_id) = msg.guild_id {
+        if let Ok(channel_name) = args.single::<String>() {
+            if let Some(text_channel) = get_text_channel(ctx, &server_id, &channel_name).await {
+                let response = get_stats(text_channel, ctx).await;
+                //send it`
+                if let Err(why) = msg.channel_id.say(&ctx.http, &response).await {
+                    println!("Error sending message: {:?}", why);
+                }
+                None
+            } else {
+                Some(format!("No text channel found with name: {}", channel_name))
+            }
+        } else {
+            Some(String::from("1 Arg expected: String: Channel name"))
+        }
+    } else {
+        Some(String::from(
+            "BUG: message had no server id, bot only supports server text channels",
+        ))
+    };
+    if let Some(simple_response) = reply {
+        msg.reply(ctx, simple_response).await?;
+    }
     Ok(())
 }
 
@@ -172,4 +267,14 @@ async fn get_text_channel(
             },
         )
         .map(|gc| gc.clone())
+}
+
+trait MessageBuilderExt {
+    fn newline(&mut self) -> &mut Self;
+}
+
+impl MessageBuilderExt for MessageBuilder {
+    fn newline(&mut self) -> &mut Self {
+        self.push("\n")
+    }
 }
