@@ -14,20 +14,71 @@ use serenity::model::prelude::*;
 use crate::state::{Store, StoreData, StoryData, StoryKey};
 use log::{debug, info};
 use serenity::http::Http;
+use serenity::static_assertions::_core::sync::atomic::AtomicBool;
 use serenity::utils::MessageBuilder;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::future::Future;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
+use tokio::time::Duration;
 
 #[group]
 #[commands(ping, init_channel, show_stats)]
 struct General;
 
-struct Handler;
+struct Handler {
+    tasks_running: AtomicBool,
+}
 
 #[async_trait]
-impl EventHandler for Handler {}
+impl EventHandler for Handler {
+    async fn ready(&self, _ctx: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
+    }
+
+    // We use the cache_ready event just in case some cache operation is required in whatever use
+    // case you have for this.
+    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
+        println!("Cache built successfully!");
+        if !self.tasks_running.load(Ordering::Relaxed) {
+            let ctx = Arc::new(ctx);
+            let ctx1 = Arc::clone(&ctx);
+            let _ = tokio::spawn(async move {
+                dictionary_update_worker(ctx1).await;
+            });
+            let ctx2 = Arc::clone(&ctx);
+            let _ = tokio::spawn(async move {
+                dump_state(ctx2).await;
+            });
+            self.tasks_running.swap(true, Ordering::Relaxed);
+        }
+    }
+}
+
+async fn dictionary_update_worker(_ctx: Arc<Context>) {
+    loop {
+        println!("Dictionary update!");
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
+}
+
+async fn dump_state(ctx: Arc<Context>) {
+    loop {
+        println!("Dumping state!");
+        {
+            let store_lock = {
+                let data_read = ctx.data.read().await;
+                data_read
+                    .get::<StoreData>()
+                    .expect("Expected StoryData in TypeMap.")
+                    .clone()
+            };
+            let store = store_lock.read().unwrap();
+            store.dump().unwrap();
+        }
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -41,7 +92,9 @@ async fn main() {
         .normal_message(on_regular_message)
         .group(&GENERAL_GROUP);
     let mut client = Client::builder(&token)
-        .event_handler(Handler)
+        .event_handler(Handler {
+            tasks_running: AtomicBool::new(false),
+        })
         .framework(framework)
         .await
         .expect("Error creating client");
@@ -49,7 +102,8 @@ async fn main() {
     // Insert the global data:
     {
         let mut data = client.data.write().await;
-        data.insert::<StoreData>(Arc::new(RwLock::new(Store::default())));
+        let store = Store::load();
+        data.insert::<StoreData>(Arc::new(RwLock::new(store)));
     }
 
     // start listening for events by starting a single shard
@@ -78,7 +132,7 @@ async fn on_regular_message(ctx: &Context, message: &Message) {
     //Update a stats if this channel is initialised
     if let Some(server_id) = message.guild_id {
         let story_key = (server_id, message.channel_id);
-        update_stats_if_exist(story_key, ctx, message);
+        update_stats_if_exist(story_key, ctx, message).await;
     }
 }
 

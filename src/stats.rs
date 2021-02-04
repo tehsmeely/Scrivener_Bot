@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
 use log::{debug, info};
+use serde::{Deserialize, Serialize};
 use serenity::model::channel::Message;
 use serenity::model::id::MessageId;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct WordStats {
     pub word_count: usize,
     pub word_frequencies: HashMap<String, usize>,
