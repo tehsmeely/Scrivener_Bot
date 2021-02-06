@@ -12,10 +12,11 @@ use serenity::model::channel::Message;
 use serenity::model::prelude::*;
 
 use crate::state::{Store, StoreData, StoryData, StoryKey};
-use log::{debug, info};
+use log::{debug, info, warn, LevelFilter};
 use serenity::http::Http;
 use serenity::static_assertions::_core::sync::atomic::AtomicBool;
 use serenity::utils::MessageBuilder;
+use simplelog::{Config, SimpleLogger};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::sync::atomic::Ordering;
@@ -41,6 +42,7 @@ impl EventHandler for Handler {
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         println!("Cache built successfully!");
         if !self.tasks_running.load(Ordering::Relaxed) {
+            store_replay(&ctx).await;
             let ctx = Arc::new(ctx);
             let ctx1 = Arc::clone(&ctx);
             let _ = tokio::spawn(async move {
@@ -53,6 +55,57 @@ impl EventHandler for Handler {
             self.tasks_running.swap(true, Ordering::Relaxed);
         }
     }
+}
+
+async fn store_replay(ctx: &Context) {
+    let story_keys_with_last_message = {
+        let store_lock = {
+            let data_read = ctx.data.read().await;
+            data_read
+                .get::<StoreData>()
+                .expect("Expected StoryData in TypeMap.")
+                .clone()
+        };
+        let mut store = store_lock.read().unwrap();
+        store.story_keys_with_last_message()
+    };
+    info!("initialising store! {:#?}", story_keys_with_last_message);
+    let mut new_messages = HashMap::<StoryKey, Vec<Message>>::new();
+    for (story_key, last_message_id) in story_keys_with_last_message.into_iter() {
+        let (_, channel_id) = story_key;
+        let channel_name = channel_id.name(&ctx.cache).await.unwrap();
+        info!("Checking for missed messages in {}", channel_name);
+        let msgs = channel_id
+            .messages(&ctx.http, |get_messages_builder| {
+                get_messages_builder.after(last_message_id).limit(50)
+            })
+            .await
+            .unwrap();
+        info!("Got messages: {:?}", msgs);
+        if msgs.len() > 0 {
+            new_messages.insert(story_key, msgs);
+        }
+    }
+    info!(
+        "Retrieved {} messages across all channels to populate:",
+        new_messages.len()
+    );
+    let store_lock = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<StoreData>()
+            .expect("Expected StoryData in TypeMap.")
+            .clone()
+    };
+    let mut store = store_lock.write().unwrap();
+    for (story_key, messages) in new_messages {
+        //Since we got these messages from the store, we can expect the key to exist
+        let story_data = store.data.get_mut(&story_key).unwrap();
+        for message in messages {
+            story_data.update(&message);
+        }
+    }
+    info!("Finished initialising");
 }
 
 async fn dictionary_update_worker(_ctx: Arc<Context>) {
@@ -82,6 +135,10 @@ async fn dump_state(ctx: Arc<Context>) {
 
 #[tokio::main]
 async fn main() {
+    let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
+    log::info!("Testing log: Info");
+    log::debug!("Testing log: Debug");
+    log::warn!("Testing log: Warn");
     // Login with a bot token from the environment
     let token = env::var("BOT_TOKEN").expect("token");
     let http = Http::new_with_token(&token);
@@ -102,7 +159,13 @@ async fn main() {
     // Insert the global data:
     {
         let mut data = client.data.write().await;
-        let store = Store::load().unwrap();
+        let store = match Store::load() {
+            Ok(store) => store,
+            Err(e) => {
+                println!("Parse failed: {:#?}", e);
+                panic!(e)
+            }
+        };
         data.insert::<StoreData>(Arc::new(RwLock::new(store)));
     }
 

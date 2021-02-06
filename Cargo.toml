@@ -11,5 +11,7 @@ tokio = { version = "1.1.1", features = ["macros", "rt-multi-thread"] }
 serenity = "0.10"
 chrono = "0.4.19"
 log = "0.4.14"
+simplelog = "0.9.0"
 serde = "1.0.123"
 ron = "0.6.4"
+serde-lexpr = "0.1.2"

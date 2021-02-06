@@ -22,6 +22,7 @@ impl WordStats {
     }
     pub fn update(&mut self, message: &Message) {
         if !self.included_messages.contains(&message.id) {
+            info!("Wordstats update. message: {:?}", message);
             let words = crate::language_parsing::tokenise(&message.content);
             debug!("Parsed {} words from message {}", words.len(), message.id);
             self.word_count += words.len();
@@ -34,11 +35,18 @@ impl WordStats {
                 }
             }
             self.included_messages.insert(message.id);
-            if let Some((_, last_message_time)) = self.last_message {
-                if message.timestamp > last_message_time {
-                    self.last_message = Some((message.id, message.timestamp));
-                }
+            let should_update_last_message = match self.last_message {
+                None => true,
+                Some((_, last_message_time)) => message.timestamp > last_message_time,
+            };
+            if should_update_last_message {
+                self.last_message = Some((message.id, message.timestamp));
             }
+        } else {
+            info!(
+                "Wordstats did not update, message seen.\nmessage: {:?}",
+                message
+            );
         }
     }
 
@@ -58,5 +66,9 @@ impl WordStats {
         };
         let top_words = sorted_words.get(0..result_len).unwrap();
         top_words.join(", ")
+    }
+
+    pub fn last_message(&self) -> Option<MessageId> {
+        self.last_message.map(|(mid, _date)| mid)
     }
 }
