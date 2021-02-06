@@ -2,17 +2,14 @@ Discord bot based on [serenity](https://github.com/serenity-rs/serenity)
 
 
 
+Suggested bot permissions: permissions=523344
 
-## Plan
+https://discord.com/api/oauth2/authorize?client_id=805918656622100500&permissions=523344&scope=bot
 
-* Per server:
-    * Define a channel as a "story channel" with [config]
-    * Calculate stats for that server
-    
 
-### story-channel config
-* Whether to look historically (Might be necessary if adding to huge existing stories)
-* Whether to keep track of timing and who's up next and whether to alert
+## TODO:
+* 
+
 
 
 ### Word Frequencies:

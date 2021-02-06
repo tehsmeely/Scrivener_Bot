@@ -1,8 +1,6 @@
 use crate::stats::WordStats;
-use log::{debug, info};
-use ron::ser::PrettyConfig;
+use log::debug;
 use serde::{Deserialize, Serialize};
-use serenity::http::Http;
 use serenity::model::channel::Message;
 use serenity::model::id::{ChannelId, GuildId, MessageId};
 use serenity::model::user::User;
@@ -10,7 +8,6 @@ use serenity::prelude::TypeMapKey;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
 pub struct StoreData;
@@ -29,14 +26,7 @@ pub type StoryKey = (GuildId, ChannelId);
 impl Store {
     pub fn dump(&self) -> std::io::Result<()> {
         let mut f = File::create("state.sexp").unwrap();
-        let pretty_config = PrettyConfig::new()
-            .with_depth_limit(4)
-            .with_indentor("\t".to_owned());
-        f.write_all(
-            //ron::ser::to_string_pretty::<Self>(self, pretty_config)
-            //ron::ser::to_string::<Self>(self)
-            serde_lexpr::to_string(self).unwrap().as_bytes(),
-        )
+        f.write_all(serde_lexpr::to_string(self).unwrap().as_bytes())
     }
 
     pub fn load() -> serde_lexpr::error::Result<Self> {
@@ -44,8 +34,6 @@ impl Store {
             Ok(mut f) => {
                 let mut buf = String::new();
                 f.read_to_string(&mut buf).unwrap();
-                println!("{:#?}", buf);
-                //ron::de::from_str(&buf)
                 serde_lexpr::from_str(&buf)
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -63,6 +51,19 @@ impl Store {
                     .general_stats
                     .last_message()
                     .map(|m_id| (story_key.clone(), m_id))
+            })
+            .collect()
+    }
+
+    pub fn get_all_channels_in_server(&self, target_server_id: &GuildId) -> Vec<ChannelId> {
+        self.data
+            .keys()
+            .filter_map(|(server_id, channel_id)| {
+                if server_id == target_server_id {
+                    Some(channel_id.clone())
+                } else {
+                    None
+                }
             })
             .collect()
     }
