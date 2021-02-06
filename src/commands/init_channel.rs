@@ -38,6 +38,11 @@ async fn actually_init_channel(
         //Keep populating back in time until all messages are fetched
         let oldest_message = chrono::Utc::now();
         let mut fetched_messages = 0;
+        {
+            //Fetch the last_msg_id itself, or we miss it by just jumping in with [before(id)]
+            let last_msg = text_channel.message(&ctx.http, last_msg_id).await.unwrap();
+            story_data.update(&last_msg);
+        }
         loop {
             let messages: Vec<Message> = text_channel
                 .messages(&ctx.http, |get_messages_builder| {
