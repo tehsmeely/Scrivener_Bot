@@ -27,10 +27,15 @@ use tokio::time::Duration;
 use commands::init_channel::INIT_CHANNEL_COMMAND;
 use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
+use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
 
 #[group]
 #[commands(ping, init_channel, show_stats, show_channels)]
 struct General;
+
+#[group]
+#[commands(gen_wordcloud)]
+struct WordCloud;
 
 struct Handler {
     tasks_running: AtomicBool,
@@ -151,7 +156,8 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!").on_mention(Some(app_info.id)))
         .normal_message(on_regular_message)
-        .group(&GENERAL_GROUP);
+        .group(&GENERAL_GROUP)
+        .group(&WORDCLOUD_GROUP);
     let mut client = Client::builder(&token)
         .event_handler(Handler {
             tasks_running: AtomicBool::new(false),

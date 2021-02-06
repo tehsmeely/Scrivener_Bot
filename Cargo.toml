@@ -15,3 +15,5 @@ simplelog = "0.9.0"
 serde = "1.0.123"
 ron = "0.6.4"
 serde-lexpr = "0.1.2"
+serde_json = "1.0"
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
