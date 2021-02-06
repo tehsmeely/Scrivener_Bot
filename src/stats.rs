@@ -82,6 +82,7 @@ impl WordStats {
     }
 }
 
+// From: https://github.com/amueller/word_cloud/blob/master/wordcloud/stopwords
 const STOP_WORDS: [&str; 192] = [
     "a",
     "about",

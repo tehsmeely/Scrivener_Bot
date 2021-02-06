@@ -38,12 +38,6 @@ struct Handler {
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-    }
-
-    // We use the cache_ready event just in case some cache operation is required in whatever use
-    // case you have for this.
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         println!("Cache built successfully!");
         if !self.tasks_running.load(Ordering::Relaxed) {
@@ -59,6 +53,10 @@ impl EventHandler for Handler {
             });
             self.tasks_running.swap(true, Ordering::Relaxed);
         }
+    }
+
+    async fn ready(&self, _ctx: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
     }
 }
 
@@ -110,6 +108,7 @@ async fn store_replay(ctx: &Context) {
             story_data.update(&message);
         }
     }
+    store.finish_replay();
     info!("Finished initialising");
 }
 
@@ -189,10 +188,7 @@ async fn update_stats_if_exist(story_key: StoryKey, ctx: &Context, message: &Mes
             .clone()
     };
     let mut store = store_lock.write().unwrap();
-    match store.data.get_mut(&story_key) {
-        Some(story_data) => story_data.update(message),
-        None => debug!("Message not in a channel that's been initialised"),
-    }
+    store.process_message(&story_key, message);
 }
 
 #[hook]

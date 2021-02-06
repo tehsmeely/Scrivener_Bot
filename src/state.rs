@@ -18,15 +18,24 @@ impl TypeMapKey for StoreData {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Store {
+    replay_needed: bool,
+    queued_messages_until_replay: Vec<(StoryKey, Message)>,
     pub data: HashMap<StoryKey, StoryData>,
 }
 
 pub type StoryKey = (GuildId, ChannelId);
 
 impl Store {
+    fn new(data: HashMap<StoryKey, StoryData>) -> Self {
+        Store {
+            replay_needed: true,
+            queued_messages_until_replay: Vec::new(),
+            data,
+        }
+    }
     pub fn dump(&self) -> std::io::Result<()> {
         let mut f = File::create("state.sexp").unwrap();
-        f.write_all(serde_lexpr::to_string(self).unwrap().as_bytes())
+        f.write_all(serde_lexpr::to_string(&self.data).unwrap().as_bytes())
     }
 
     pub fn load() -> serde_lexpr::error::Result<Self> {
@@ -34,7 +43,8 @@ impl Store {
             Ok(mut f) => {
                 let mut buf = String::new();
                 f.read_to_string(&mut buf).unwrap();
-                serde_lexpr::from_str(&buf)
+                serde_lexpr::from_str::<HashMap<StoryKey, StoryData>>(&buf)
+                    .map(|data| Store::new(data))
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 serde_lexpr::error::Result::Ok(Store::default())
@@ -66,6 +76,28 @@ impl Store {
                 }
             })
             .collect()
+    }
+
+    pub fn finish_replay(&mut self) {
+        for (key, message) in self.queued_messages_until_replay.drain(..) {
+            match self.data.get_mut(&key) {
+                Some(story_data) => story_data.update(&message),
+                None => debug!("Message not in a channel that's been initialised"),
+            }
+        }
+        self.replay_needed = false;
+    }
+
+    pub fn process_message(&mut self, story_key: &StoryKey, message: &Message) {
+        match self.replay_needed {
+            true => self
+                .queued_messages_until_replay
+                .push((story_key.clone(), message.clone())),
+            false => match self.data.get_mut(&story_key) {
+                Some(story_data) => story_data.update(message),
+                None => debug!("Message not in a channel that's been initialised"),
+            },
+        }
     }
 }
 
