@@ -48,6 +48,10 @@ async fn get_stats(text_channel: GuildChannel, ctx: &Context) -> String {
 }
 
 #[command("show-stats")]
+#[usage("<channel name>")]
+#[description("Display stats for an initialised channel by name. Returns an error if channel hasn't been initialised")]
+#[example("the-fall-of-rome")]
+#[only_in("guilds")] // Reminder: guild = server
 async fn show_stats(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = if let Some(server_id) = msg.guild_id {
         if let Ok(channel_name) = args.single::<String>() {

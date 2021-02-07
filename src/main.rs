@@ -6,8 +6,9 @@ mod stats;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
-    macros::{command, group, hook},
-    Args, CommandResult, StandardFramework,
+    help_commands,
+    macros::{command, group, help, hook},
+    Args, CommandGroup, CommandResult, HelpOptions, StandardFramework,
 };
 use serenity::model::channel::Message;
 use serenity::model::prelude::*;
@@ -18,7 +19,7 @@ use serenity::http::Http;
 use serenity::static_assertions::_core::sync::atomic::AtomicBool;
 use serenity::utils::MessageBuilder;
 use simplelog::{Config, SimpleLogger};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
@@ -29,6 +30,7 @@ use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
 use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
 use std::process::Command;
+use sysinfo::get_current_pid;
 
 #[group]
 #[commands(ping, ping_me, init_channel, show_stats, show_channels)]
@@ -157,8 +159,11 @@ async fn main() {
     let app_info = http.get_current_application_info().await.unwrap();
     println!("{:#?}", app_info);
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!").on_mention(Some(app_info.id)))
+        .configure(|c| c.prefix("!ssw ").on_mention(Some(app_info.id)))
         .normal_message(on_regular_message)
+        .bucket("global-wordcloud-bucket", |b| b.limit(2).time_span(30))
+        .await
+        .help(&MY_HELP)
         .group(&GENERAL_GROUP)
         .group(&WORDCLOUD_GROUP);
     let mut client = Client::builder(&token)
@@ -186,6 +191,19 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
+}
+
+#[help]
+async fn my_help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
 }
 
 async fn update_stats_if_exist(story_key: StoryKey, ctx: &Context, message: &Message) {

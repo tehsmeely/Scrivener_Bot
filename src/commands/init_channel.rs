@@ -83,6 +83,10 @@ async fn actually_init_channel(
 }
 
 #[command("init-channel")]
+#[usage("<channel name>")]
+#[description("Initialise a channel to generate stats for. Will backpopulate from existing messages and keep an eye out for future ones")]
+#[example("the-fall-of-rome")]
+#[only_in("guilds")] // Reminder: guild = server
 async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = if let Some(server_id) = msg.guild_id {
         if let Ok(channel_to_init) = args.single::<String>() {

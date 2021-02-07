@@ -20,26 +20,37 @@ const REQUEST_PATH: &str =
     "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordcloud\\working\\in";
 const IMAGE_PATH: &str = "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordcloud\\working\\out";
 
-fn help_text(error: Option<&impl Display>) -> String {
-    let maybe_error_s = if let Some(e) = error {
-        format!("\nCommand error: {}", e)
-    } else {
-        String::from("")
-    };
-    format!("Usage: gen-wordcloud <Channel name> <User>\nChannel name: String name of the channel\nUser: Mention the user with \"@\"{}", maybe_error_s)
+fn error_help_text(error: &impl Display) -> String {
+    format!("ERROR: Invalid Arguments: {}", error)
 }
-fn parse_args(args: &mut Args) -> std::result::Result<(String, UserId), String> {
-    //TODO: Should probably consider a way to specify "General" instead of author specific;
-    let maybe_channel_name = args.single::<String>();
-    let maybe_user = args.single::<UserId>();
-    match (maybe_channel_name, maybe_user) {
-        (Ok(channel_name), Ok(user)) => Ok((channel_name, user)),
-        (Ok(_), Err(user_name_error)) => Err(help_text(Some(&user_name_error))),
-        (Err(channel_name_error), _) => Err(help_text(Some(&channel_name_error))),
+fn parse_args(args: &mut Args) -> std::result::Result<(String, Option<UserId>), String> {
+    match args.len() {
+        1 => match args.single::<String>() {
+            Ok(channel_name) => Ok((channel_name, None)),
+            Err(e) => Err(error_help_text(&e)),
+        },
+        2 => {
+            let maybe_channel_name = args.single::<String>();
+            let maybe_user = args.single::<UserId>();
+            match (maybe_channel_name, maybe_user) {
+                (Ok(channel_name), Ok(user)) => Ok((channel_name, Some(user))),
+                (Ok(_), Err(user_name_error)) => Err(error_help_text(&user_name_error)),
+                (Err(channel_name_error), _) => Err(error_help_text(&channel_name_error)),
+            }
+        }
+        _ => Err(String::from("Invalid number of args")),
     }
 }
 
 #[command("gen-wordcloud")]
+#[usage("<channel name> [<user mention>]")]
+#[description(
+    "Generate a wordcloud from the given channel's general stats. If a user is given (via @mention) the wordcloud if for just that user's stats"
+)]
+#[example("war-and-peace")]
+#[example("the-fall-of-rome @Caligula")]
+#[bucket("global-wordcloud-bucket")]
+#[only_in("guilds")] // Reminder: guild = server
 async fn gen_wordcloud(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = match parse_args(&mut args) {
         Ok((channel_name, user_id)) => {
@@ -71,7 +82,7 @@ async fn request_and_fetch_wordcloud(
     story_key: &StoryKey,
     ctx: &Context,
     send_to_channel: &ChannelId,
-    user: &UserId,
+    user: &Option<UserId>,
 ) -> Option<String> {
     //Look up a specific user's frequencies in WordStats, dump to specific file, watch for response from the worker
     let users_stats = {
@@ -85,10 +96,15 @@ async fn request_and_fetch_wordcloud(
         let store = store_lock.read().unwrap();
         if let Some(story_data) = store.data.get(story_key) {
             let mut res = None;
-            for (author, stats) in story_data.author_stats.iter() {
-                if &author.id == user {
-                    res = Some(stats.word_frequencies.clone())
+            match user {
+                Some(user_id) => {
+                    for (author, stats) in story_data.author_stats.iter() {
+                        if &author.id == user_id {
+                            res = Some(stats.word_frequencies.clone())
+                        }
+                    }
                 }
+                None => res = Some(story_data.general_stats.word_frequencies.clone()),
             }
             res
         } else {
@@ -139,7 +155,7 @@ async fn wait_for_image(expecting_path: &Path) -> tokio::io::Result<()> {
         if expecting_path.exists() {
             return Ok(());
         }
-        elapsed_time.add(wait_time);
+        elapsed_time += wait_time;
         tokio::time::sleep(wait_time).await;
     }
     Err(tokio::io::Error::new(
