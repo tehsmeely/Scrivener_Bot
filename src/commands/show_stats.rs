@@ -15,16 +15,14 @@ fn sort_by_last_message_and_maybe_truncate(
     stats_map: &HashMap<User, WordStats>,
     truncate_limit: Option<usize>,
 ) -> SortedHashMap<User, WordStats> {
-    println!("Creating fancy iterator");
     let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-    let mut ref_vector = stats_map
+    let mut ref_vector: Vec<(&User, Option<&DateTime<Utc>>)> = stats_map
         .iter()
         .map(|(user, stats)| (user, stats.last_message_time()))
-        .collect::<Vec<(&User, Option<&DateTime<Utc>>)>>();
+        .collect();
     ref_vector.sort_by_key(|(_, d)| d.unwrap_or(&epoch));
-    println!("Raw sorted vec: {:?}", ref_vector);
-    let sorted_keys = ref_vector.iter().map(|(user, _)| *user).collect();
-    println!("Sorted user keys: {:?}", ref_vector);
+    //We reverse it for the keys since we want newest (i.e. highest date value) first
+    let sorted_keys = ref_vector.iter().rev().map(|(user, _)| *user).collect();
     SortedHashMap::new(stats_map, sorted_keys, truncate_limit)
 }
 
