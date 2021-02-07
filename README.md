@@ -1,5 +1,5 @@
 # Story Stats
-*~A Discord Bot~*
+####*Discord Bot*
 
 ## What Does it Do?
 If you have channels where 1+ Users are writing stories (Be they roleplay, ruanchy, or anything else!) in sequential messages,
