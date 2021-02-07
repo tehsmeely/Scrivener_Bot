@@ -1,3 +1,5 @@
+use serenity::utils::MessageBuilder;
+
 pub mod iterators {
     use std::cmp;
     use std::collections::HashMap;
@@ -9,6 +11,7 @@ pub mod iterators {
         sorted_keys: Vec<&'a K>,
         limit: usize,
         i: usize,
+        pub is_truncated: bool,
     }
 
     impl<'a, K, V> SortedHashMap<'a, K, V> {
@@ -25,7 +28,16 @@ pub mod iterators {
                 sorted_keys,
                 limit,
                 i: 0,
+                is_truncated,
             }
+        }
+
+        pub fn is_truncated(&self) -> bool {
+            self.is_truncated
+        }
+
+        pub fn limit(&self) -> usize {
+            self.limit
         }
     }
 
@@ -47,11 +59,39 @@ pub mod iterators {
     //TODO: Extension: Implement IntoIterator including some sort_by fn to generate [sorted_keys]
 }
 
+pub mod trait_extensions {
+    use serenity::utils::MessageBuilder;
+
+    pub trait MessageBuilderExt {
+        fn newline(&mut self) -> &mut Self;
+        fn apply_if<F>(&mut self, apply: bool, f: F) -> &mut Self
+        where
+            F: FnOnce(&mut Self) -> &mut Self;
+    }
+
+    impl MessageBuilderExt for MessageBuilder {
+        fn newline(&mut self) -> &mut Self {
+            self.push("\n")
+        }
+        fn apply_if<F>(&mut self, apply: bool, f: F) -> &mut Self
+        where
+            F: FnOnce(&mut Self) -> &mut Self,
+        {
+            if apply {
+                f(self);
+            }
+            self
+        }
+    }
+}
+
 #[cfg(test)]
-mod tests {
-    use crate::utils::iterators::SortedHashMap;
-    use serenity::futures::StreamExt;
+mod test_iter {
     use std::collections::HashMap;
+
+    use serenity::futures::StreamExt;
+
+    use crate::utils::iterators::SortedHashMap;
 
     fn make_map() -> HashMap<String, (usize, f32)> {
         let mut map = HashMap::new();

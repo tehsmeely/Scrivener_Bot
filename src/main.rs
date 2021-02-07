@@ -1,9 +1,10 @@
-mod commands;
-mod language_parsing;
-mod state;
-mod stats;
-mod utils;
+use std::collections::{HashMap, HashSet};
+use std::env;
+use std::process::Command;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, RwLock};
 
+use log::{debug, info, LevelFilter};
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -11,27 +12,27 @@ use serenity::framework::standard::{
     macros::{command, group, help, hook},
     Args, CommandGroup, CommandResult, HelpOptions, StandardFramework,
 };
+use serenity::http::Http;
 use serenity::model::channel::Message;
 use serenity::model::prelude::*;
-
-use crate::state::{Store, StoreData, StoryKey};
-use log::{debug, info, LevelFilter};
-use serenity::http::Http;
 use serenity::static_assertions::_core::sync::atomic::AtomicBool;
 use serenity::utils::MessageBuilder;
 use simplelog::{Config, SimpleLogger};
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::sync::atomic::Ordering;
-use std::sync::{Arc, RwLock};
+use sysinfo::get_current_pid;
 use tokio::time::Duration;
 
 use commands::init_channel::INIT_CHANNEL_COMMAND;
 use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
 use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
-use std::process::Command;
-use sysinfo::get_current_pid;
+
+use crate::state::{Store, StoreData, StoryKey};
+
+mod commands;
+mod language_parsing;
+mod state;
+mod stats;
+mod utils;
 
 #[group]
 #[commands(ping, ping_me, init_channel, show_stats, show_channels)]
@@ -244,14 +245,4 @@ async fn ping_me(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
             .await?;
     }
     Ok(())
-}
-
-trait MessageBuilderExt {
-    fn newline(&mut self) -> &mut Self;
-}
-
-impl MessageBuilderExt for MessageBuilder {
-    fn newline(&mut self) -> &mut Self {
-        self.push("\n")
-    }
 }

@@ -1,7 +1,7 @@
 use crate::state::{StoreData, StoryKey};
 use crate::stats::WordStats;
 use crate::utils::iterators::SortedHashMap;
-use crate::MessageBuilderExt;
+use crate::utils::trait_extensions::MessageBuilderExt;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serenity::framework::standard::help_commands::with_embeds;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
@@ -39,6 +39,8 @@ async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<
     let store = store_lock.read().unwrap();
     match store.data.get(&story_key) {
         Some(story_data) => {
+            let mut stats_iterator =
+                sort_by_last_message_and_maybe_truncate(&story_data.author_stats, truncate_limit);
             let mut builder = MessageBuilder::new();
             let base_builder = builder
                 .push("For ")
@@ -48,17 +50,21 @@ async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<
                 .push_line_safe(format!(
                     "Word count: {}",
                     story_data.general_stats.word_count
-                ));
-            let final_builder =
-                sort_by_last_message_and_maybe_truncate(&story_data.author_stats, truncate_limit)
-                    .fold(base_builder, |builder, (author, stats)| {
-                        builder
-                            .newline()
-                            .user(author)
-                            .newline()
-                            .push_line_safe(format!("Word count: {}", stats.word_count))
-                            .push_line_safe(format!("Top words: {}", stats.top_words(5)))
-                    });
+                ))
+                .apply_if(stats_iterator.is_truncated(), |mb|
+                    mb.newline().push_line(
+                        format!("Not all authors are displayed below, just the {} most recent ones. Add [-full] to see all of them",
+                            stats_iterator.limit())
+                    )
+                );
+            let final_builder = stats_iterator.fold(base_builder, |builder, (author, stats)| {
+                builder
+                    .newline()
+                    .user(author)
+                    .newline()
+                    .push_line_safe(format!("Word count: {}", stats.word_count))
+                    .push_line_safe(format!("Top words: {}", stats.top_words(5)))
+            });
             final_builder.build()
         }
 
@@ -68,7 +74,8 @@ async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<
 
 fn get_truncate_limit(args: &mut Args) -> Option<usize> {
     // TODO: This default should be somewhere central, pluck it out of Context when needed?
-    let default = Some(5);
+    // TODO: MAJOR: Change this testing value back to a good one - 5?
+    let default = Some(0);
     if args.len() > 0 {
         match args.single::<String>() {
             Ok(s) => {

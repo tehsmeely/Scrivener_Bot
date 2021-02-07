@@ -1,5 +1,5 @@
 use crate::state::StoreData;
-use crate::MessageBuilderExt;
+use crate::utils::trait_extensions::MessageBuilderExt;
 use log::error;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::prelude::*;
