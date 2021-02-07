@@ -80,6 +80,12 @@ impl WordStats {
     pub fn last_message(&self) -> Option<MessageId> {
         self.last_message.map(|(mid, _date)| mid)
     }
+    pub fn last_message_time(&self) -> Option<&DateTime<Utc>> {
+        match &self.last_message {
+            None => None,
+            Some((_, date)) => Some(date),
+        }
+    }
 }
 
 // From: https://github.com/amueller/word_cloud/blob/master/wordcloud/stopwords

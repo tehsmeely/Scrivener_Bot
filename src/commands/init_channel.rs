@@ -1,4 +1,3 @@
-use crate::commands::helpers::get_text_channel;
 use crate::state::{StoreData, StoryData, StoryKey};
 use log::info;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
@@ -83,23 +82,31 @@ async fn actually_init_channel(
 }
 
 #[command("init-channel")]
-#[usage("<channel name>")]
+#[usage("<#channel name>")]
 #[description("Initialise a channel to generate stats for. Will backpopulate from existing messages and keep an eye out for future ones")]
-#[example("the-fall-of-rome")]
+#[example("#the-fall-of-rome")]
 #[only_in("guilds")] // Reminder: guild = server
 async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = if let Some(server_id) = msg.guild_id {
-        if let Ok(channel_to_init) = args.single::<String>() {
-            if let Some(text_channel) = get_text_channel(ctx, &server_id, &channel_to_init).await {
+        if let Ok(channel_to_init) = args.single::<ChannelId>() {
+            //Safely assuming we can convert to a guild channel considering the [only_in] constraint
+            let channel = channel_to_init
+                .to_channel(&ctx)
+                .await
+                .unwrap()
+                .guild()
+                .unwrap();
+
+            if channel.kind == ChannelType::Text {
                 msg.reply(ctx, "Initialising channel, bear with me")
                     .await
                     .unwrap();
-                match actually_init_channel(text_channel, ctx).await {
+                match actually_init_channel(channel, ctx).await {
                     Ok(()) => format!("Story stats initialised for {}", channel_to_init),
                     Err(error_string) => format!("Not initialised: {}", error_string),
                 }
             } else {
-                format!("No text channel found with name: {}", channel_to_init)
+                format!("Channel is not a text-channel, can only init normal text channels")
             }
         } else {
             String::from("1 Arg expected: String: Channel name")

@@ -1,4 +1,3 @@
-use crate::commands::helpers::get_text_channel;
 use crate::state::{StoreData, StoryKey};
 use crate::MessageBuilderExt;
 use log::error;
@@ -23,14 +22,14 @@ const IMAGE_PATH: &str = "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordc
 fn error_help_text(error: &impl Display) -> String {
     format!("ERROR: Invalid Arguments: {}", error)
 }
-fn parse_args(args: &mut Args) -> std::result::Result<(String, Option<UserId>), String> {
+fn parse_args(args: &mut Args) -> std::result::Result<(ChannelId, Option<UserId>), String> {
     match args.len() {
-        1 => match args.single::<String>() {
+        1 => match args.single::<ChannelId>() {
             Ok(channel_name) => Ok((channel_name, None)),
             Err(e) => Err(error_help_text(&e)),
         },
         2 => {
-            let maybe_channel_name = args.single::<String>();
+            let maybe_channel_name = args.single::<ChannelId>();
             let maybe_user = args.single::<UserId>();
             match (maybe_channel_name, maybe_user) {
                 (Ok(channel_name), Ok(user)) => Ok((channel_name, Some(user))),
@@ -43,27 +42,23 @@ fn parse_args(args: &mut Args) -> std::result::Result<(String, Option<UserId>), 
 }
 
 #[command("gen-wordcloud")]
-#[usage("<channel name> [<user mention>]")]
+#[usage("<#channel name> [<@user mention>]")]
 #[description(
     "Generate a wordcloud from the given channel's general stats. If a user is given (via @mention) the wordcloud if for just that user's stats"
 )]
-#[example("war-and-peace")]
-#[example("the-fall-of-rome @Caligula")]
+#[example("#war-and-peace")]
+#[example("#the-fall-of-rome @Caligula")]
 #[bucket("global-wordcloud-bucket")]
 #[only_in("guilds")] // Reminder: guild = server
 async fn gen_wordcloud(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = match parse_args(&mut args) {
-        Ok((channel_name, user_id)) => {
+        Ok((channel_id, user_id)) => {
             if let Some(server_id) = msg.guild_id {
-                if let Some(text_channel) = get_text_channel(ctx, &server_id, &channel_name).await {
-                    msg.reply(ctx, "Attempting to generate a wordcloud")
-                        .await
-                        .unwrap();
-                    let story_key = (server_id, text_channel.id);
-                    request_and_fetch_wordcloud(&story_key, ctx, &msg.channel_id, &user_id).await
-                } else {
-                    Some(format!("No text channel found with name: {}", channel_name))
-                }
+                msg.reply(ctx, "Attempting to generate a wordcloud")
+                    .await
+                    .unwrap();
+                let story_key = (server_id, channel_id);
+                request_and_fetch_wordcloud(&story_key, ctx, &msg.channel_id, &user_id).await
             } else {
                 Some(String::from(
                     "BUG: message had no server id, bot only supports server text channels",
@@ -151,7 +146,7 @@ async fn wait_for_image(expecting_path: &Path) -> tokio::io::Result<()> {
     let mut elapsed_time = Duration::new(0, 0);
     let wait_time = Duration::from_millis(300);
     let timeout = Duration::from_secs(2);
-    while elapsed_time < timeout {
+    while elapsed_time <= timeout {
         if expecting_path.exists() {
             return Ok(());
         }
@@ -160,6 +155,6 @@ async fn wait_for_image(expecting_path: &Path) -> tokio::io::Result<()> {
     }
     Err(tokio::io::Error::new(
         ErrorKind::Other,
-        "Timed out waiting for file to appear",
+        "Timed out waiting for file to appear (2s)",
     ))
 }

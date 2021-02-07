@@ -2,6 +2,7 @@ mod commands;
 mod language_parsing;
 mod state;
 mod stats;
+mod utils;
 
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
