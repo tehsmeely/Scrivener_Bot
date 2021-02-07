@@ -7,6 +7,7 @@ use serenity::http::AttachmentType;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::utils::MessageBuilder;
+use std::fmt::Display;
 use std::fs::File;
 use std::ops::Add;
 use std::path::Path;
@@ -19,36 +20,49 @@ const REQUEST_PATH: &str =
     "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordcloud\\working\\in";
 const IMAGE_PATH: &str = "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordcloud\\working\\out";
 
+fn help_text(error: Option<&impl Display>) -> String {
+    let maybe_error_s = if let Some(e) = error {
+        format!("\nCommand error: {}", e)
+    } else {
+        String::from("")
+    };
+    format!("Usage: gen-wordcloud <Channel name> <User>\nChannel name: String name of the channel\nUser: Mention the user with \"@\"{}", maybe_error_s)
+}
+fn parse_args(args: &mut Args) -> std::result::Result<(String, UserId), String> {
+    //TODO: Should probably consider a way to specify "General" instead of author specific;
+    let maybe_channel_name = args.single::<String>();
+    let maybe_user = args.single::<UserId>();
+    match (maybe_channel_name, maybe_user) {
+        (Ok(channel_name), Ok(user)) => Ok((channel_name, user)),
+        (Ok(_), Err(user_name_error)) => Err(help_text(Some(&user_name_error))),
+        (Err(channel_name_error), _) => Err(help_text(Some(&channel_name_error))),
+    }
+}
+
 #[command("gen-wordcloud")]
 async fn gen_wordcloud(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let reply = if let Some(server_id) = msg.guild_id {
-        if let Ok(channel_to_init) = args.single::<String>() {
-            if let Some(text_channel) = get_text_channel(ctx, &server_id, &channel_to_init).await {
-                if let Ok(username) = args.single::<String>() {
+    let reply = match parse_args(&mut args) {
+        Ok((channel_name, user_id)) => {
+            if let Some(server_id) = msg.guild_id {
+                if let Some(text_channel) = get_text_channel(ctx, &server_id, &channel_name).await {
                     msg.reply(ctx, "Attempting to generate a wordcloud")
                         .await
                         .unwrap();
                     let story_key = (server_id, text_channel.id);
-                    request_and_fetch_wordcloud(&story_key, ctx, &msg.channel_id, &username).await
+                    request_and_fetch_wordcloud(&story_key, ctx, &msg.channel_id, &user_id).await
                 } else {
-                    Some(format!("Arg expected: String: username"))
+                    Some(format!("No text channel found with name: {}", channel_name))
                 }
             } else {
-                Some(format!(
-                    "No text channel found with name: {}",
-                    channel_to_init
+                Some(String::from(
+                    "BUG: message had no server id, bot only supports server text channels",
                 ))
             }
-        } else {
-            Some(String::from("1 Arg expected: String: Channel name"))
         }
-    } else {
-        Some(String::from(
-            "BUG: message had no server id, bot only supports server text channels",
-        ))
+        Err(parse_command_error) => Some(parse_command_error),
     };
-    if let Some(reply) = reply {
-        msg.reply(ctx, reply).await?;
+    if let Some(reply_) = reply {
+        msg.reply(ctx, reply_).await?;
     }
     Ok(())
 }
@@ -57,7 +71,7 @@ async fn request_and_fetch_wordcloud(
     story_key: &StoryKey,
     ctx: &Context,
     send_to_channel: &ChannelId,
-    user: &str,
+    user: &UserId,
 ) -> Option<String> {
     //Look up a specific user's frequencies in WordStats, dump to specific file, watch for response from the worker
     let users_stats = {
@@ -72,7 +86,7 @@ async fn request_and_fetch_wordcloud(
         if let Some(story_data) = store.data.get(story_key) {
             let mut res = None;
             for (author, stats) in story_data.author_stats.iter() {
-                if author.name == user {
+                if &author.id == user {
                     res = Some(stats.word_frequencies.clone())
                 }
             }

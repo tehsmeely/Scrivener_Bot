@@ -7,7 +7,7 @@ use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
     macros::{command, group, hook},
-    CommandResult, StandardFramework,
+    Args, CommandResult, StandardFramework,
 };
 use serenity::model::channel::Message;
 use serenity::model::prelude::*;
@@ -28,9 +28,10 @@ use commands::init_channel::INIT_CHANNEL_COMMAND;
 use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
 use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
+use std::process::Command;
 
 #[group]
-#[commands(ping, init_channel, show_stats, show_channels)]
+#[commands(ping, ping_me, init_channel, show_stats, show_channels)]
 struct General;
 
 #[group]
@@ -144,12 +145,14 @@ async fn dump_state(ctx: Arc<Context>) {
 
 #[tokio::main]
 async fn main() {
+    //Start python wordcloud worker
+    let python_path = env::var("PYTHON_PATH").expect("Need Python Path");
+    let _python_wordcloud_worker = Command::new(python_path)
+        .arg("wordcloud/word_cloud_worker.py")
+        .spawn()
+        .unwrap();
     let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
-    log::info!("Testing log: Info");
-    log::debug!("Testing log: Debug");
-    log::warn!("Testing log: Warn");
-    // Login with a bot token from the environment
-    let token = env::var("BOT_TOKEN").expect("token");
+    let token = env::var("BOT_TOKEN").expect("Need bot token");
     let http = Http::new_with_token(&token);
     let app_info = http.get_current_application_info().await.unwrap();
     println!("{:#?}", app_info);
@@ -209,6 +212,18 @@ async fn on_regular_message(ctx: &Context, message: &Message) {
 #[command]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     msg.reply(ctx, "Pong!").await?;
+    Ok(())
+}
+
+#[command("ping-me")]
+async fn ping_me(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    if let Ok(user) = args.single::<UserId>() {
+        println!("Got: {}", user);
+        msg.reply(ctx, format!("Got: {:?}", user)).await?;
+    } else {
+        msg.reply(ctx, "Failed to parsed username from the command's arg")
+            .await?;
+    }
     Ok(())
 }
 
