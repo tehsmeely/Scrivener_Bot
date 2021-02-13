@@ -74,8 +74,7 @@ async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<
 
 fn get_truncate_limit(args: &mut Args) -> Option<usize> {
     // TODO: This default should be somewhere central, pluck it out of Context when needed?
-    // TODO: MAJOR: Change this testing value back to a good one - 5?
-    let default = Some(0);
+    let default = Some(5);
     if args.len() > 0 {
         match args.single::<String>() {
             Ok(s) => {

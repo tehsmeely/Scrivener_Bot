@@ -9,8 +9,8 @@ use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
     help_commands,
-    macros::{command, group, help, hook},
-    Args, CommandGroup, CommandResult, HelpOptions, StandardFramework,
+    macros::{check, command, group, help, hook},
+    Args, CommandGroup, CommandOptions, CommandResult, HelpOptions, Reason, StandardFramework,
 };
 use serenity::http::Http;
 use serenity::model::channel::Message;
@@ -50,6 +50,7 @@ struct WordCloud;
 
 #[group]
 #[commands(ping, ping_me, dump_messages)]
+#[help_available(false)]
 struct Debug;
 
 struct Handler {
@@ -265,6 +266,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command("ping-me")]
+#[checks("AdminOnly")]
 async fn ping_me(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     if let Ok(user) = args.single::<UserId>() {
         println!("Got: {}", user);
@@ -275,3 +277,18 @@ async fn ping_me(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
     }
     Ok(())
 }
+
+#[check]
+#[name = "AdminOnly"]
+async fn admin_only_check(
+    _: &Context,
+    msg: &Message,
+    _: &mut Args,
+    _: &CommandOptions,
+) -> std::result::Result<(), Reason> {
+    match ADMINS.contains(&msg.author.id.0) {
+        true => Ok(()),
+        false => Err(Reason::User("Only available to admins".to_string())),
+    }
+}
+const ADMINS: [u64; 1] = [190534649548767243];

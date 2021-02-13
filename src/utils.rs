@@ -1,5 +1,18 @@
 use serenity::utils::MessageBuilder;
 
+pub mod helpers {
+    pub fn strip_leading_trailing(s: &str, c: char) -> &str {
+        let prefix_stripped: &str = match s.strip_prefix(c) {
+            Some(stripped) => stripped,
+            None => s,
+        };
+        match prefix_stripped.strip_suffix(c) {
+            Some(stripped) => stripped,
+            None => prefix_stripped,
+        }
+    }
+}
+
 pub mod iterators {
     use std::cmp;
     use std::collections::HashMap;

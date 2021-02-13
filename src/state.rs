@@ -99,6 +99,17 @@ impl Store {
             },
         }
     }
+
+    pub fn get_unique_server_ids(&self) -> Vec<GuildId> {
+        let mut guild_ids: Vec<GuildId> = self
+            .data
+            .keys()
+            .map(|(guild_id, _channel_id)| guild_id.clone())
+            .collect();
+        guild_ids.sort();
+        guild_ids.dedup();
+        guild_ids
+    }
 }
 
 // this could be a stable type since i intend to serialise this for disk storage.
