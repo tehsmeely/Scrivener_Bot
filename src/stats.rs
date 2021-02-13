@@ -25,13 +25,16 @@ impl WordStats {
             info!("Wordstats update. message: {:?}", message);
             let words = crate::language_parsing::tokenise(&message.content);
             debug!("Parsed {} words from message {}", words.len(), message.id);
-            self.word_count += words.len();
+            //self.word_count += words.len();
             for word_ in words {
                 let word = word_.to_lowercase().to_string();
-                if let Some(existing_count) = self.word_frequencies.get_mut(&word) {
-                    *existing_count += 1;
-                } else {
-                    self.word_frequencies.insert(word, 1);
+                if has_at_least_one_letter(&word) {
+                    if let Some(existing_count) = self.word_frequencies.get_mut(&word) {
+                        *existing_count += 1;
+                    } else {
+                        self.word_frequencies.insert(word, 1);
+                    }
+                    self.word_count += 1;
                 }
             }
             self.included_messages.insert(message.id);
@@ -44,7 +47,7 @@ impl WordStats {
             }
         } else {
             info!(
-                "Wordstats did not update, message seen.\nmessage: {:?}",
+                "Wordstats did not update, message already seen.\nmessage: {:?}",
                 message
             );
         }
@@ -60,10 +63,10 @@ impl WordStats {
             .iter()
             .filter_map(|(word, _)| {
                 // That ref ref deref deref deref is ... ugly ...
-                if STOP_WORDS.contains(&&***word) {
-                    None
-                } else {
+                if is_valid_word(*word) {
                     Some((*word).clone())
+                } else {
+                    None
                 }
             })
             .collect();
@@ -77,6 +80,16 @@ impl WordStats {
         top_words.join(", ")
     }
 
+    pub fn filtered_word_frequencies(&self) -> HashMap<String, usize> {
+        let mut out = HashMap::new();
+        for (word, count) in self.word_frequencies.iter() {
+            if is_valid_word(word) {
+                out.insert(word.clone(), *count);
+            }
+        }
+        out
+    }
+
     pub fn last_message(&self) -> Option<MessageId> {
         self.last_message.map(|(mid, _date)| mid)
     }
@@ -86,6 +99,16 @@ impl WordStats {
             Some((_, date)) => Some(date),
         }
     }
+}
+
+fn is_valid_word(word: &str) -> bool {
+    has_at_least_one_letter(word) && is_not_stop_word(word)
+}
+fn has_at_least_one_letter(word: &str) -> bool {
+    word.contains(|c| 'a' < c && c < 'z')
+}
+fn is_not_stop_word(word: &str) -> bool {
+    !STOP_WORDS.contains(&word)
 }
 
 // From: https://github.com/amueller/word_cloud/blob/master/wordcloud/stopwords

@@ -2,7 +2,7 @@
 #### *Discord Bot*
 
 ## What Does it Do?
-If you have channels where 1+ Users are writing stories (Be they roleplay, ruanchy, or anything else!) in sequential messages,
+If you have channels where 1+ Users are writing stories (Be they roleplay, raunchy, or anything else!) in sequential messages,
 this bot can be used on the server hosting such stories to report on stats about these stories
 
 ## What Stats?

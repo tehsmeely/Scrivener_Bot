@@ -2,3 +2,6 @@
 /.idea/
 /wordcloud/working/
 /wordcloud/venv/
+config.ron
+state.json
+*.messages.json

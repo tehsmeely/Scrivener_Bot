@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::process::Command;
+use std::process::{Child, Command};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 
@@ -17,30 +17,40 @@ use serenity::model::channel::Message;
 use serenity::model::prelude::*;
 use serenity::static_assertions::_core::sync::atomic::AtomicBool;
 use serenity::utils::MessageBuilder;
-use simplelog::{Config, SimpleLogger};
+use simplelog::SimpleLogger;
 use sysinfo::get_current_pid;
 use tokio::time::Duration;
 
+use commands::dump_messages::DUMP_MESSAGES_COMMAND;
 use commands::init_channel::INIT_CHANNEL_COMMAND;
 use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
 use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
 
+use crate::config::{GeneralAppConfig, GeneralAppConfigData};
 use crate::state::{Store, StoreData, StoryKey};
+use std::path::{Path, PathBuf};
 
+#[macro_use]
+mod macros;
 mod commands;
+mod config;
 mod language_parsing;
 mod state;
 mod stats;
 mod utils;
 
 #[group]
-#[commands(ping, ping_me, init_channel, show_stats, show_channels)]
+#[commands(init_channel, show_stats, show_channels)]
 struct General;
 
 #[group]
 #[commands(gen_wordcloud)]
 struct WordCloud;
+
+#[group]
+#[commands(ping, ping_me, dump_messages)]
+struct Debug;
 
 struct Handler {
     tasks_running: AtomicBool,
@@ -147,15 +157,32 @@ async fn dump_state(ctx: Arc<Context>) {
     }
 }
 
+fn maybe_start_python_wordcloud_worker(config: &GeneralAppConfig) -> Option<Child> {
+    if let Some(word_cloud_config) = &config.wordcloud_config {
+        let default_python_path = PathBuf::from(".");
+        let python_path = word_cloud_config
+            .venv_path
+            .as_ref()
+            .unwrap_or(&default_python_path);
+        let python_wordcloud_worker = Command::new(word_cloud_config.python_path.as_os_str())
+            .env("PYTHONPATH", python_path)
+            .arg("wordcloud/word_cloud_worker.py")
+            .arg(word_cloud_config.request_path.as_os_str())
+            .arg(word_cloud_config.generated_image_path.as_os_str())
+            .spawn()
+            .unwrap();
+        Some(python_wordcloud_worker)
+    } else {
+        None
+    }
+}
+
 #[tokio::main]
 async fn main() {
+    let config = GeneralAppConfig::load(Path::new("config.ron")).unwrap();
     //Start python wordcloud worker
-    let python_path = env::var("PYTHON_PATH").expect("Need Python Path");
-    let _python_wordcloud_worker = Command::new(python_path)
-        .arg("wordcloud/word_cloud_worker.py")
-        .spawn()
-        .unwrap();
-    let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
+    let _worker = maybe_start_python_wordcloud_worker(&config);
+    let _ = SimpleLogger::init(LevelFilter::Info, simplelog::Config::default());
     let token = env::var("BOT_TOKEN").expect("Need bot token");
     let http = Http::new_with_token(&token);
     let app_info = http.get_current_application_info().await.unwrap();
@@ -167,6 +194,7 @@ async fn main() {
         .await
         .help(&MY_HELP)
         .group(&GENERAL_GROUP)
+        .group(&DEBUG_GROUP)
         .group(&WORDCLOUD_GROUP);
     let mut client = Client::builder(&token)
         .event_handler(Handler {
@@ -187,6 +215,7 @@ async fn main() {
             }
         };
         data.insert::<StoreData>(Arc::new(RwLock::new(store)));
+        data.insert::<GeneralAppConfigData>(Arc::new(RwLock::new(config)));
     }
 
     // start listening for events by starting a single shard

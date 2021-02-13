@@ -18,3 +18,4 @@ serde-lexpr = "0.1.2"
 serde_json = "1.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 sysinfo = "0.16.1"
+unidecode = "0.3.0"

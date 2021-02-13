@@ -81,6 +81,23 @@ async fn actually_init_channel(
     Ok(())
 }
 
+fn unicode_emoji(s: &str) -> ReactionType {
+    ReactionType::Unicode(String::from(s))
+}
+async fn react_or_reply(msg: &Message, ctx: &Context) {
+    match msg.react(ctx, unicode_emoji("🤖")).await {
+        Ok(_) => {
+            let _ = msg.react(ctx, unicode_emoji("⌚")).await.unwrap();
+        }
+        Err(_) => {
+            let _ = msg
+                .reply(ctx, "Initialising channel, bear with me...")
+                .await
+                .unwrap();
+        }
+    }
+}
+
 #[command("init-channel")]
 #[usage("<#channel name>")]
 #[description("Initialise a channel to generate stats for. Will backpopulate from existing messages and keep an eye out for future ones")]
@@ -98,9 +115,7 @@ async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
                 .unwrap();
 
             if channel.kind == ChannelType::Text {
-                msg.reply(ctx, "Initialising channel, bear with me")
-                    .await
-                    .unwrap();
+                react_or_reply(msg, ctx).await;
                 match actually_init_channel(channel, ctx).await {
                     Ok(()) => format!("Story stats initialised for {}", channel_to_init),
                     Err(error_string) => format!("Not initialised: {}", error_string),

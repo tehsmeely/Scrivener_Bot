@@ -98,7 +98,7 @@ fn get_truncate_limit(args: &mut Args) -> Option<usize> {
 #[example("#the-fall-of-rome")]
 #[only_in("guilds")] // Reminder: guild = server
 async fn show_stats(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let reply = if let Some(server_id) = msg.guild_id {
+    let reply = if let Some(_server_id) = msg.guild_id {
         if let Ok(channel_id) = args.single::<ChannelId>() {
             let truncate_limit = get_truncate_limit(&mut args);
             let response = get_stats(channel_id, ctx, truncate_limit).await;
