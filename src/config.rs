@@ -18,12 +18,14 @@ impl TypeMapKey for GeneralAppConfigData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GeneralAppConfig {
+    pub prefix: String,
     pub wordcloud_config: Option<WordCloudConfig>,
 }
 
 impl Default for GeneralAppConfig {
     fn default() -> Self {
         Self {
+            prefix: String::from("!"),
             wordcloud_config: Some(WordCloudConfig::default()),
         }
     }

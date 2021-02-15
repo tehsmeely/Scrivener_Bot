@@ -189,7 +189,7 @@ async fn main() {
     let app_info = http.get_current_application_info().await.unwrap();
     println!("{:#?}", app_info);
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!ssw ").on_mention(Some(app_info.id)))
+        .configure(|c| c.prefix(&config.prefix).on_mention(Some(app_info.id)))
         .normal_message(on_regular_message)
         .bucket("global-wordcloud-bucket", |b| b.limit(2).time_span(30))
         .await

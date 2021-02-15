@@ -1,4 +1,4 @@
-# Story Stats
+# Scrivener
 #### *Discord Bot*
 
 ## What Does it Do?
@@ -12,6 +12,12 @@ Right now, the bot will give you the following stats:
 * Word Frequencies: Reports the top most used words, again for everyone or a specific user
 * Word Clouds: Generates and attached a word cloud image of the words used by everyone or a specific user in the channel 
 
+
+## Expansion Features:
+* Server-wide info
+  * Cross-channel summaries (Top most posted channels, summaries across them for the user)
+  * Server-wide wordclouds per user or general
+  * Required for the above: Display and management of initialised channels 
 ---
 
 ## Technical Stuff
@@ -22,6 +28,8 @@ To add to a server, click [here](https://discord.com/api/oauth2/authorize?client
 
 
 ### TODO:
+* Admin/Role control for initialising channels
+  
 * Make arg handling clearer
   * Cleaner code
   * more obvious errors on invalid args
