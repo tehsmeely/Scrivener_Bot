@@ -191,7 +191,7 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(&config.prefix).on_mention(Some(app_info.id)))
         .normal_message(on_regular_message)
-        .bucket("global-wordcloud-bucket", |b| b.limit(2).time_span(30))
+        .bucket("global-wordcloud-bucket", |b| b.limit(20).time_span(30))
         .await
         .help(&MY_HELP)
         .group(&GENERAL_GROUP)
