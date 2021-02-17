@@ -37,7 +37,7 @@ async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<
             .clone()
     };
     let store = store_lock.read().unwrap();
-    match store.data.get(&story_key) {
+    match store.get_channel_data(&story_key) {
         Some(story_data) => {
             let mut stats_iterator =
                 sort_by_last_message_and_maybe_truncate(&story_data.author_stats, truncate_limit);

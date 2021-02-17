@@ -124,9 +124,9 @@ async fn store_replay(ctx: &Context) {
     let mut store = store_lock.write().unwrap();
     for (story_key, messages) in new_messages {
         //Since we got these messages from the store, we can expect the key to exist
-        let story_data = store.data.get_mut(&story_key).unwrap();
+        let channel_data = store.get_channel_data_mut(&story_key).unwrap();
         for message in messages {
-            story_data.update(&message);
+            channel_data.update(&message);
         }
     }
     store.finish_replay();

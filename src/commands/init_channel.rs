@@ -1,4 +1,4 @@
-use crate::state::{StoreData, StoryData, StoryKey};
+use crate::state::{ChannelData, StoreData, StoryKey};
 use log::info;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::prelude::*;
@@ -20,7 +20,7 @@ async fn actually_init_channel(
                 .clone()
         };
         let store = store_lock.read().unwrap();
-        store.data.contains_key(&story_key)
+        store.channel_data_exists(&story_key)
     };
     if story_data_exists {
         return Err(format!(
@@ -28,7 +28,7 @@ async fn actually_init_channel(
             text_channel.name, text_channel.id
         ));
     }
-    let mut story_data = StoryData::default();
+    let mut channel_data = ChannelData::default();
     info!(
         "Creating new story data for server_id {}, channel id {}",
         text_channel.guild_id, text_channel.id
@@ -40,7 +40,7 @@ async fn actually_init_channel(
         {
             //Fetch the last_msg_id itself, or we miss it by just jumping in with [before(id)]
             let last_msg = text_channel.message(&ctx.http, last_msg_id).await.unwrap();
-            story_data.update(&last_msg);
+            channel_data.update(&last_msg);
         }
         loop {
             let messages: Vec<Message> = text_channel
@@ -58,7 +58,7 @@ async fn actually_init_channel(
                     if message.timestamp < oldest_message {
                         last_msg_id = message.id
                     }
-                    story_data.update(&message);
+                    channel_data.update(&message);
                 }
                 info!("Processed {} messages so far...", fetched_messages)
             }
@@ -75,7 +75,7 @@ async fn actually_init_channel(
                 .clone()
         };
         let mut store = store_lock.write().unwrap();
-        store.data.insert(story_key, story_data);
+        store.insert_channel_data_maybe_create_server_data(&story_key, channel_data);
     };
 
     Ok(())
@@ -103,6 +103,7 @@ async fn react_or_reply(msg: &Message, ctx: &Context) {
 #[description("Initialise a channel to generate stats for. Will backpopulate from existing messages and keep an eye out for future ones")]
 #[example("#the-fall-of-rome")]
 #[only_in("guilds")] // Reminder: guild = server
+#[allowed_roles("mods", "admins", "bot-admin")]
 async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = if let Some(server_id) = msg.guild_id {
         if let Ok(channel_to_init) = args.single::<ChannelId>() {

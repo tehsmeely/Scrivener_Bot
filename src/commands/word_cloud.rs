@@ -119,7 +119,7 @@ async fn request_and_fetch_wordcloud(
                 .clone()
         };
         let store = store_lock.read().unwrap();
-        if let Some(story_data) = store.data.get(story_key) {
+        if let Some(story_data) = store.get_channel_data(story_key) {
             let mut res: Option<HashMap<String, usize>> = None;
             match user {
                 Some(user_id) => {
