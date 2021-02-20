@@ -69,6 +69,29 @@ pub mod iterators {
         }
     }
 
+    pub mod helpers {
+        use crate::stats::WordStats;
+        use crate::utils::iterators::SortedHashMap;
+        use chrono::{DateTime, NaiveDateTime, Utc};
+        use serenity::model::prelude::User;
+        use std::collections::HashMap;
+
+        pub fn sort_by_last_message_and_maybe_truncate(
+            stats_map: &HashMap<User, WordStats>,
+            truncate_limit: Option<usize>,
+        ) -> SortedHashMap<User, WordStats> {
+            let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+            let mut ref_vector: Vec<(&User, Option<&DateTime<Utc>>)> = stats_map
+                .iter()
+                .map(|(user, stats)| (user, stats.last_message_time()))
+                .collect();
+            ref_vector.sort_by_key(|(_, d)| d.unwrap_or(&epoch));
+            //We reverse it for the keys since we want newest (i.e. highest date value) first
+            let sorted_keys = ref_vector.iter().rev().map(|(user, _)| *user).collect();
+            SortedHashMap::new(stats_map, sorted_keys, truncate_limit)
+        }
+    }
+
     //TODO: Extension: Implement IntoIterator including some sort_by fn to generate [sorted_keys]
 }
 

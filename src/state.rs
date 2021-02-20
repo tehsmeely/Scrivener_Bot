@@ -1,14 +1,19 @@
 use crate::stats::WordStats;
+use crate::utils::iterators::helpers::sort_by_last_message_and_maybe_truncate;
+use crate::utils::trait_extensions::MessageBuilderExt;
 use log::debug;
 use serde::{Deserialize, Serialize};
-use serenity::model::channel::Message;
-use serenity::model::id::{ChannelId, GuildId, MessageId};
+use serenity::model::channel::{GuildChannel, Message};
+use serenity::model::id::{ChannelId, GuildId, MessageId, UserId};
+use serenity::model::prelude::Channel;
 use serenity::model::user::User;
 use serenity::prelude::TypeMapKey;
+use serenity::utils::MessageBuilder;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, RwLock};
+use test::NamePadding::PadNone;
 
 pub struct StoreData;
 
@@ -103,6 +108,13 @@ impl Store {
         guild_ids
     }
 
+    pub fn get_server_data_mut(&mut self, server_id: &GuildId) -> Option<&mut ServerData> {
+        self.data.get_mut(server_id)
+    }
+    pub fn get_server_data(&self, server_id: &GuildId) -> Option<&ServerData> {
+        self.data.get(server_id)
+    }
+
     pub fn get_channel_data_mut(
         &mut self,
         (server_id, channel_id): &StoryKey,
@@ -169,6 +181,43 @@ impl ChannelData {
             self.author_stats.insert(message.author.clone(), word_stats);
         }
     }
+
+    pub fn make_stats_string(
+        &self,
+        text_channel: &GuildChannel,
+        truncate_limit: Option<usize>,
+    ) -> String {
+        let mut stats_iterator =
+            sort_by_last_message_and_maybe_truncate(&self.author_stats, truncate_limit);
+        let mut builder = MessageBuilder::new();
+        let base_builder = builder
+            .push("For ")
+            .channel(text_channel)
+            .newline()
+            .push_bold_line("General")
+            .push_line_safe(format!(
+                "Word count: {}",
+                self.general_stats.word_count
+            ))
+            .apply_if(stats_iterator.is_truncated(), |mb|
+                mb.newline().push_line(
+                    format!("Not all authors are displayed below, just the {} most recent ones. Add [-full] to see all of them",
+                            stats_iterator.limit())
+                )
+            );
+        let final_builder = stats_iterator.fold(base_builder, |builder, (author, stats)| {
+            builder
+                .newline()
+                .user(author)
+                .newline()
+                .push_line_safe(format!("Word count: {}", stats.word_count))
+                .push_line_safe(format!("Top words: {}", stats.top_words(5)))
+        });
+        final_builder.build()
+    }
+    pub fn get_user(&self, user: &User) -> Option<&WordStats> {
+        self.author_stats.get(user)
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -200,5 +249,29 @@ impl ServerData {
 
     pub fn insert(&mut self, channel_id: &ChannelId, channel_data: ChannelData) {
         self.channels.insert(*channel_id, channel_data);
+    }
+
+    pub fn make_user_stats_string(&self, user: &User) -> String {
+        // Top channels by word count
+        // Todo: Enable -recent- word count by supporting it in stats
+        let mut channels_by_wordcound: Vec<(Channel_id, usize)> = self
+            .channels
+            .iter()
+            .filter_map(|(channel_id, channel_data)| {
+                channel_data
+                    .get_user(user)
+                    .map(|stats| (channel_id.clone(), stats.word_count.clone()))
+            })
+            .collect();
+        channels_by_wordcound.sort_by_key(|(_id, count)| count);
+        let mut builder = MessageBuilder::new();
+        if channels_by_wordcound.len() == 0 {
+            builder
+                .user(user)
+                .push(" has no recorded activity in any initialised channels");
+        } else {
+            builder.
+        }
+        format!("")
     }
 }

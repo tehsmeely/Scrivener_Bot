@@ -1,6 +1,6 @@
 [package]
-name = "StoryStatsWatcher"
-version = "0.1.0"
+name = "Scrivener"
+version = "1.0.0"
 authors = ["Jonty <jon.heiser@gmail.com>"]
 edition = "2018"
 

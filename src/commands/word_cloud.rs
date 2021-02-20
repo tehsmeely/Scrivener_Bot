@@ -19,8 +19,8 @@ use uuid::Uuid;
 
 //TODO: Put these in config inside Context
 const REQUEST_PATH: &str =
-    "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordcloud\\working\\in";
-const IMAGE_PATH: &str = "D:\\Library\\Documents\\rust\\StoryStatsWatcher\\wordcloud\\working\\out";
+    "D:\\Library\\Documents\\rust\\Scrivener\\wordcloud\\working\\in";
+const IMAGE_PATH: &str = "D:\\Library\\Documents\\rust\\Scrivener\\wordcloud\\working\\out";
 
 fn error_help_text(error: &impl Display) -> String {
     format!("ERROR: Invalid Arguments: {}", error)

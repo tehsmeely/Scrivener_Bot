@@ -11,21 +11,6 @@ use serenity::utils::MessageBuilder;
 use std::hash::Hash;
 use std::{cmp, collections::HashMap};
 
-fn sort_by_last_message_and_maybe_truncate(
-    stats_map: &HashMap<User, WordStats>,
-    truncate_limit: Option<usize>,
-) -> SortedHashMap<User, WordStats> {
-    let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-    let mut ref_vector: Vec<(&User, Option<&DateTime<Utc>>)> = stats_map
-        .iter()
-        .map(|(user, stats)| (user, stats.last_message_time()))
-        .collect();
-    ref_vector.sort_by_key(|(_, d)| d.unwrap_or(&epoch));
-    //We reverse it for the keys since we want newest (i.e. highest date value) first
-    let sorted_keys = ref_vector.iter().rev().map(|(user, _)| *user).collect();
-    SortedHashMap::new(stats_map, sorted_keys, truncate_limit)
-}
-
 async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<usize>) -> String {
     let text_channel = channel_id.to_channel(&ctx).await.unwrap().guild().unwrap();
     let story_key: StoryKey = (text_channel.guild_id, channel_id);
@@ -38,36 +23,7 @@ async fn get_stats(channel_id: ChannelId, ctx: &Context, truncate_limit: Option<
     };
     let store = store_lock.read().unwrap();
     match store.get_channel_data(&story_key) {
-        Some(story_data) => {
-            let mut stats_iterator =
-                sort_by_last_message_and_maybe_truncate(&story_data.author_stats, truncate_limit);
-            let mut builder = MessageBuilder::new();
-            let base_builder = builder
-                .push("For ")
-                .channel(text_channel)
-                .newline()
-                .push_bold_line("General")
-                .push_line_safe(format!(
-                    "Word count: {}",
-                    story_data.general_stats.word_count
-                ))
-                .apply_if(stats_iterator.is_truncated(), |mb|
-                    mb.newline().push_line(
-                        format!("Not all authors are displayed below, just the {} most recent ones. Add [-full] to see all of them",
-                            stats_iterator.limit())
-                    )
-                );
-            let final_builder = stats_iterator.fold(base_builder, |builder, (author, stats)| {
-                builder
-                    .newline()
-                    .user(author)
-                    .newline()
-                    .push_line_safe(format!("Word count: {}", stats.word_count))
-                    .push_line_safe(format!("Top words: {}", stats.top_words(5)))
-            });
-            final_builder.build()
-        }
-
+        Some(channel_data) => channel_data.make_stats_string(&text_channel, truncate_limit),
         None => format!("Channel not initialised, use [init-channel] to add it"),
     }
 }
