@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, RwLock};
-use test::NamePadding::PadNone;
 
 pub struct StoreData;
 
@@ -251,10 +250,10 @@ impl ServerData {
         self.channels.insert(*channel_id, channel_data);
     }
 
-    pub fn make_user_stats_string(&self, user: &User) -> String {
-        // Top channels by word count
+    // Returns the sorted list of channel ids for a given user.
+    pub fn channel_ids_by_wordcount_for_user(&self, user: &User) -> Vec<(ChannelId, usize)> {
         // Todo: Enable -recent- word count by supporting it in stats
-        let mut channels_by_wordcound: Vec<(Channel_id, usize)> = self
+        let mut channels_by_wordcount: Vec<(ChannelId, usize)> = self
             .channels
             .iter()
             .filter_map(|(channel_id, channel_data)| {
@@ -263,15 +262,44 @@ impl ServerData {
                     .map(|stats| (channel_id.clone(), stats.word_count.clone()))
             })
             .collect();
-        channels_by_wordcound.sort_by_key(|(_id, count)| count);
+        channels_by_wordcount.sort_by_key(|(_id, count)| *count);
+        channels_by_wordcount.reverse();
+        channels_by_wordcount
+    }
+    pub fn make_user_stats_string(
+        user: &User,
+        channels_by_wordcount: Vec<(Channel, usize)>,
+    ) -> String {
         let mut builder = MessageBuilder::new();
-        if channels_by_wordcound.len() == 0 {
+        if channels_by_wordcount.len() == 0 {
             builder
                 .user(user)
-                .push(" has no recorded activity in any initialised channels");
+                .push(" has no recorded activity in any initialised channels")
+                .build()
         } else {
-            builder.
+            let max = std::cmp::min(5, channels_by_wordcount.len());
+            builder
+                .push("Top ")
+                .push(max)
+                .push(" channels on this server for: ")
+                .user(user)
+                .newline()
+                .push_line("By Wordcount for all time:");
+            let mut i = 0;
+            for (channel, word_count) in channels_by_wordcount.iter() {
+                builder
+                    .push(i + 1)
+                    .push(": ")
+                    .channel(channel)
+                    .push(" -> ")
+                    .push(word_count)
+                    .newline();
+                i += 1;
+                if i >= max {
+                    break;
+                }
+            }
+            builder.build()
         }
-        format!("")
     }
 }

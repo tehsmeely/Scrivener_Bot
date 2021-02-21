@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::process::{Child, Command};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 
@@ -23,13 +22,17 @@ use tokio::time::Duration;
 
 use commands::dump_messages::DUMP_MESSAGES_COMMAND;
 use commands::init_channel::INIT_CHANNEL_COMMAND;
+use commands::server_summary::SERVER_SUMMARY_COMMAND;
 use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
 use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
 
 use crate::config::{GeneralAppConfig, GeneralAppConfigData};
 use crate::state::{Store, StoreData, StoryKey};
+use serenity::futures::StreamExt;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[macro_use]
 mod macros;
@@ -41,7 +44,7 @@ mod stats;
 mod utils;
 
 #[group]
-#[commands(init_channel, show_stats, show_channels)]
+#[commands(init_channel, show_stats, show_channels, server_summary)]
 struct General;
 
 #[group]
@@ -93,7 +96,7 @@ async fn store_replay(ctx: &Context) {
         let store = store_lock.read().unwrap();
         store.story_keys_with_last_message()
     };
-    info!("initialising store! {:#?}", story_keys_with_last_message);
+    info!("initialising store!");
     let mut new_messages = HashMap::<StoryKey, Vec<Message>>::new();
     for (story_key, last_message_id) in story_keys_with_last_message.into_iter() {
         let (_, channel_id) = story_key;
@@ -105,7 +108,7 @@ async fn store_replay(ctx: &Context) {
             })
             .await
             .unwrap();
-        info!("Got messages: {:?}", msgs);
+        info!("Got {} messages", msgs.len());
         if msgs.len() > 0 {
             new_messages.insert(story_key, msgs);
         }
@@ -158,31 +161,50 @@ async fn dump_state(ctx: Arc<Context>) {
     }
 }
 
-fn maybe_start_python_wordcloud_worker(config: &GeneralAppConfig) -> Option<Child> {
+fn maybe_start_python_wordcloud_worker(config: &GeneralAppConfig) {
     if let Some(word_cloud_config) = &config.wordcloud_config {
         let default_python_path = PathBuf::from(".");
         let python_path = word_cloud_config
             .venv_path
             .as_ref()
             .unwrap_or(&default_python_path);
-        let python_wordcloud_worker = Command::new(word_cloud_config.python_path.as_os_str())
-            .env("PYTHONPATH", python_path)
-            .arg("wordcloud/word_cloud_worker.py")
-            .arg(word_cloud_config.request_path.as_os_str())
-            .arg(word_cloud_config.generated_image_path.as_os_str())
-            .spawn()
-            .unwrap();
-        Some(python_wordcloud_worker)
-    } else {
-        None
+        let python_wordcloud_worker =
+            tokio::process::Command::new(word_cloud_config.python_path.as_os_str())
+                .env("PYTHONPATH", python_path)
+                .arg("wordcloud/word_cloud_worker.py")
+                .arg(word_cloud_config.request_path.as_os_str())
+                .arg(word_cloud_config.generated_image_path.as_os_str())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+        wordcloud_worker_chaperone(python_wordcloud_worker);
     }
+}
+fn wordcloud_worker_chaperone(mut child: tokio::process::Child) {
+    let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
+    let _ = tokio::spawn(async move {
+        info!("printing wordcloud worker stdout to info");
+        while let Some(line) = stdout.next_line().await.unwrap() {
+            println!("Wordcloud Worker stdout >> {}", line);
+        }
+        info!("wordcloud worker stdout closed");
+    });
+    let _ = tokio::spawn(async move {
+        info!("printing wordcloud worker stderr to info");
+        while let Some(line) = stderr.next_line().await.unwrap() {
+            println!("Wordcloud Worker stderr >> {}", line)
+        }
+        info!("wordcloud worker stderr closed");
+    });
 }
 
 #[tokio::main]
 async fn main() {
     let config = GeneralAppConfig::load(Path::new("config.ron")).unwrap();
     //Start python wordcloud worker
-    let _worker = maybe_start_python_wordcloud_worker(&config);
+    maybe_start_python_wordcloud_worker(&config);
     let _ = SimpleLogger::init(LevelFilter::Info, simplelog::Config::default());
     let token = env::var("BOT_TOKEN").expect("Need bot token");
     let http = Http::new_with_token(&token);
@@ -191,9 +213,10 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(&config.prefix).on_mention(Some(app_info.id)))
         .normal_message(on_regular_message)
+        .unrecognised_command(on_unrecognised_command)
         .bucket("global-wordcloud-bucket", |b| b.limit(20).time_span(30))
         .await
-        .help(&MY_HELP)
+        .help(&HELP)
         .group(&GENERAL_GROUP)
         .group(&DEBUG_GROUP)
         .group(&WORDCLOUD_GROUP);
@@ -211,8 +234,7 @@ async fn main() {
         let store = match Store::load() {
             Ok(store) => store,
             Err(e) => {
-                println!("Parse failed: {:#?}", e);
-                panic!(e)
+                panic!("Parse failed: {:#?}", e);
             }
         };
         data.insert::<StoreData>(Arc::new(RwLock::new(store)));
@@ -225,8 +247,21 @@ async fn main() {
     }
 }
 
+#[hook]
+async fn on_unrecognised_command(ctx: &Context, msg: &Message, unrecognised_command_name: &str) {
+    msg.reply(
+        ctx,
+        format!(
+            "Unknown command \"{}\". Try [help]",
+            unrecognised_command_name
+        ),
+    )
+    .await
+    .unwrap();
+}
+
 #[help]
-async fn my_help(
+async fn help(
     context: &Context,
     msg: &Message,
     args: Args,
