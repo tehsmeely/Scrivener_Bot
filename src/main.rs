@@ -261,6 +261,7 @@ async fn on_unrecognised_command(ctx: &Context, msg: &Message, unrecognised_comm
 }
 
 #[help]
+#[max_levenshtein_distance(3)]
 async fn help(
     context: &Context,
     msg: &Message,

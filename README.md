@@ -2,7 +2,7 @@
 #### *Discord Bot*
 
 ## What Does it Do?
-If you have channels where 1+ Users are writing stories (Be they roleplay, raunchy, or anything else!) in sequential messages,
+If you have channels where 1+ Users are writing stories in sequential messages,
 this bot can be used on the server hosting such stories to report on stats about these stories
 
 ## What Stats?
@@ -53,7 +53,7 @@ Writing down thoughts on storing word frequencies:
     * updates that dictionary with the unprocessed messages
     * clears the unprocessed messages
     * Smashes the new stats summary into the struct
-    * saves the dictionary back to disko
+    * saves the dictionary back to disk
   
 ### On the WordCloud system
 The principle of the system is:

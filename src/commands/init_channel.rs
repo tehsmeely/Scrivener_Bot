@@ -98,38 +98,61 @@ async fn react_or_reply(msg: &Message, ctx: &Context) {
     }
 }
 
+// TODO: Load these from config
+const ALLOWED_ROLES: [&str; 3] = ["MasterScrivener", "ScrivMaster", "ScrivAdmin"];
+
 #[command("init-channel")]
 #[usage("<#channel name>")]
 #[description("Initialise a channel to generate stats for. Will backpopulate from existing messages and keep an eye out for future ones")]
 #[example("#the-fall-of-rome")]
 #[only_in("guilds")] // Reminder: guild = server
-#[allowed_roles("mods", "admins", "bot-admin")]
 async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let reply = if let Some(server_id) = msg.guild_id {
-        if let Ok(channel_to_init) = args.single::<ChannelId>() {
-            //Safely assuming we can convert to a guild channel considering the [only_in] constraint
-            let channel = channel_to_init
-                .to_channel(&ctx)
-                .await
-                .unwrap()
-                .guild()
-                .unwrap();
+        match author_is_in_allowed_roles(ctx, &server_id, &msg.author).await {
+            true => {
+                if let Ok(channel_to_init) = args.single::<ChannelId>() {
+                    //Safely assuming we can convert to a guild channel considering the [only_in] constraint
+                    let channel = channel_to_init
+                        .to_channel(&ctx)
+                        .await
+                        .unwrap()
+                        .guild()
+                        .unwrap();
 
-            if channel.kind == ChannelType::Text {
-                react_or_reply(msg, ctx).await;
-                match actually_init_channel(channel, ctx).await {
-                    Ok(()) => format!("Story stats initialised for {}", channel_to_init),
-                    Err(error_string) => format!("Not initialised: {}", error_string),
+                    if channel.kind == ChannelType::Text {
+                        react_or_reply(msg, ctx).await;
+                        match actually_init_channel(channel, ctx).await {
+                            Ok(()) => format!("Story stats initialised for {}", channel_to_init),
+                            Err(error_string) => format!("Not initialised: {}", error_string),
+                        }
+                    } else {
+                        format!("Channel is not a text-channel, can only init normal text channels")
+                    }
+                } else {
+                    String::from("1 Arg expected: String: Channel name")
                 }
-            } else {
-                format!("Channel is not a text-channel, can only init normal text channels")
             }
-        } else {
-            String::from("1 Arg expected: String: Channel name")
+            false => format!(
+                "This command is only available to those with the role {}",
+                ALLOWED_ROLES[0]
+            ),
         }
     } else {
         String::from("BUG: message had no server id, bot only supports server text channels")
     };
     msg.reply(ctx, reply).await?;
     Ok(())
+}
+
+async fn author_is_in_allowed_roles(ctx: &Context, server_id: &GuildId, user: &User) -> bool {
+    let partial_guild = server_id.to_partial_guild(ctx).await.unwrap();
+    for role_name in ALLOWED_ROLES.iter() {
+        if let Some(role) = partial_guild.role_by_name(role_name) {
+            if let Ok(true) = user.has_role(ctx, *server_id, role).await {
+                return true;
+            }
+        }
+    }
+    //Either found no roles or user did not have them (or a mix)
+    false
 }
