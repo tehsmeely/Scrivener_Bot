@@ -14,7 +14,6 @@ Right now, the bot will give you the following stats:
 
 
 ## Small TODOS:
-* Channel init should mention channel not print channel id
 * Wordcloud response should include the context: "Here's a wordcloud for User in Channel"
 * Arg errors should probably be more clear and just re-iterate what they were expecting
 

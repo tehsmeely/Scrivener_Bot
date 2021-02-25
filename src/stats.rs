@@ -22,7 +22,7 @@ impl WordStats {
     }
     pub fn update(&mut self, message: &Message) {
         if !self.included_messages.contains(&message.id) {
-            info!("Wordstats update. message: {:?}", message);
+            debug!("Wordstats update. message: {:?}", message);
             let words = crate::language_parsing::tokenise(&message.content);
             debug!("Parsed {} words from message {}", words.len(), message.id);
             //self.word_count += words.len();

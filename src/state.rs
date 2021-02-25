@@ -9,7 +9,7 @@ use serenity::model::prelude::Channel;
 use serenity::model::user::User;
 use serenity::prelude::TypeMapKey;
 use serenity::utils::MessageBuilder;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, RwLock};
@@ -24,6 +24,7 @@ impl TypeMapKey for StoreData {
 pub struct Store {
     replay_needed: bool,
     queued_messages_until_replay: Vec<(StoryKey, Message)>,
+    pub initialising_channels: HashSet<StoryKey>,
     pub data: StoreInnerData,
 }
 
@@ -34,24 +35,29 @@ impl Store {
         Store {
             replay_needed: true,
             queued_messages_until_replay: Vec::new(),
+            initialising_channels: HashSet::new(),
             data,
         }
     }
-    pub fn dump(&self) -> bincode::Result<()> {
-        let mut f = File::create("state.binc").unwrap();
+    pub fn dump(&self) -> serde_pickle::error::Result<()> {
+        let mut f = File::create("state.pickle").unwrap();
         //TODO: Consider doing this atomically so if write fails we don't lose state
         //ron::ser::to_writer(f, &self.data)
-        bincode::serialize_into(f, &self.data)
+        //bincode::serialize_into(f, &self.data)
+        serde_pickle::to_writer(&mut f, &self.data, true)
     }
 
-    pub fn load() -> bincode::Result<Self> {
-        match File::open("state.binc") {
+    pub fn load() -> serde_pickle::error::Result<Self> {
+        match File::open("state.pickle") {
             Ok(mut f) =>
             //ron::de::from_reader::<_, StoreInnerData>(f).map(|data| Store::new(data)),
             {
-                bincode::deserialize_from(f).map(|data| Store::new(data))
+                //bincode::deserialize_from(f).map(|data| Store::new(data))
+                serde_pickle::from_reader(f).map(|data| Store::new(data))
             }
-            Err(e) if e.kind() == ErrorKind::NotFound => bincode::Result::Ok(Store::default()),
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                serde_pickle::error::Result::Ok(Store::default())
+            }
             Err(other) => panic!("Failed opening state file: {}", other),
         }
     }
@@ -172,7 +178,6 @@ impl ChannelData {
     pub fn update(&mut self, message: &Message) {
         self.general_stats.update(message);
         if let Some(word_stats) = self.author_stats.get_mut(&message.author) {
-            debug!("Updating word stats for existing author");
             word_stats.update(message);
         } else {
             debug!("Inserting new word stats for new author");

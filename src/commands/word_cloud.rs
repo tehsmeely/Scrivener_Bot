@@ -175,6 +175,11 @@ async fn request_and_fetch_wordcloud(
     mask_name: &Option<MaskName>,
 ) -> Option<String> {
     //Look up a specific user's frequencies in WordStats, dump to specific file, watch for response from the worker
+    let response_content = MessageBuilder::new()
+        .push("Word cloud for channel ")
+        .channel(story_key.1)
+        .apply_if(user.is_some(), |b| b.push(" for user ").user(user.unwrap()))
+        .build();
     let users_stats = {
         let store_lock = {
             let data_read = ctx.data.read().await;
@@ -240,7 +245,7 @@ async fn request_and_fetch_wordcloud(
                 }];
                 send_to_channel
                     .send_files(&ctx.http, files, |create_message| {
-                        create_message.content("Here's your wordcloud!")
+                        create_message.content(response_content)
                     })
                     .await
                     .unwrap();

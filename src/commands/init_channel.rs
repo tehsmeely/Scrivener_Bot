@@ -3,6 +3,7 @@ use log::info;
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::prelude::*;
 use serenity::prelude::*;
+use serenity::utils::MessageBuilder;
 
 async fn actually_init_channel(
     text_channel: GuildChannel,
@@ -11,7 +12,8 @@ async fn actually_init_channel(
     //Fetch from store, if exists, refuse
     // See example https://github.com/serenity-rs/serenity/blob/current/examples/e12_global_data/src/main.rs
     let story_key: StoryKey = (text_channel.guild_id, text_channel.id);
-    let story_data_exists = {
+    // Check if channel is initialised, or in the process of being so
+    let (story_data_exists, channel_being_initialised_already) = {
         let store_lock = {
             let data_read = ctx.data.read().await;
             data_read
@@ -20,14 +22,34 @@ async fn actually_init_channel(
                 .clone()
         };
         let store = store_lock.read().unwrap();
-        store.channel_data_exists(&story_key)
+        (
+            store.channel_data_exists(&story_key),
+            store.initialising_channels.contains(&story_key),
+        )
     };
     if story_data_exists {
         return Err(format!(
-            "The channel {} (id: {}) is already initialised",
-            text_channel.name, text_channel.id
+            "The channel {} is already initialised",
+            text_channel.name
+        ));
+    } else if channel_being_initialised_already {
+        return Err(format!(
+            "The channel {} is already in the process of being initialised",
+            text_channel.name
         ));
     }
+    //Set channel as being initialised
+    {
+        let store_lock = {
+            let data_read = ctx.data.read().await;
+            data_read
+                .get::<StoreData>()
+                .expect("Expected StoryData in TypeMap.")
+                .clone()
+        };
+        let mut store = store_lock.write().unwrap();
+        store.initialising_channels.insert(story_key.clone());
+    };
     let mut channel_data = ChannelData::default();
     info!(
         "Creating new story data for server_id {}, channel id {}",
@@ -60,12 +82,15 @@ async fn actually_init_channel(
                     }
                     channel_data.update(&message);
                 }
-                info!("Processed {} messages so far...", fetched_messages)
+                info!(
+                    "Processed {} messages so far in {}...",
+                    fetched_messages, text_channel.name
+                )
             }
         }
     }
 
-    //Insert story_data into store
+    //Insert story_data into store and unset it as being initialised
     {
         let store_lock = {
             let data_read = ctx.data.read().await;
@@ -76,6 +101,7 @@ async fn actually_init_channel(
         };
         let mut store = store_lock.write().unwrap();
         store.insert_channel_data_maybe_create_server_data(&story_key, channel_data);
+        store.initialising_channels.remove(&story_key);
     };
 
     Ok(())
@@ -121,8 +147,12 @@ async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
 
                     if channel.kind == ChannelType::Text {
                         react_or_reply(msg, ctx).await;
+                        let okay_response = MessageBuilder::new()
+                            .push("Stats initialised for ")
+                            .channel(&channel)
+                            .build();
                         match actually_init_channel(channel, ctx).await {
-                            Ok(()) => format!("Story stats initialised for {}", channel_to_init),
+                            Ok(()) => okay_response,
                             Err(error_string) => format!("Not initialised: {}", error_string),
                         }
                     } else {
