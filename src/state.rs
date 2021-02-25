@@ -37,9 +37,10 @@ impl Store {
             data,
         }
     }
-    pub fn dump(&self) -> std::io::Result<()> {
+    pub fn dump(&self) -> serde_lexpr::error::Result<()> {
         let mut f = File::create("state.sexp").unwrap();
-        f.write_all(serde_lexpr::to_string(&self.data).unwrap().as_bytes())
+        //TODO: Consider doing this atomically so if write fails we don't lose state
+        serde_lexpr::to_writer(f, &self.data)
     }
 
     pub fn load() -> serde_lexpr::error::Result<Self> {

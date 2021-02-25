@@ -13,6 +13,11 @@ Right now, the bot will give you the following stats:
 * Word Clouds: Generates and attached a word cloud image of the words used by everyone or a specific user in the channel 
 
 
+## Small TODOS:
+* Channel init should mention channel not print channel id
+* Wordcloud response should include the context: "Here's a wordcloud for User in Channel"
+* Arg errors should probably be more clear and just re-iterate what they were expecting
+
 ## Expansion Features:
 * Server-wide info
   * Cross-channel summaries (Top most posted channels, summaries across them for the user)
