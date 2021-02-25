@@ -37,22 +37,21 @@ impl Store {
             data,
         }
     }
-    pub fn dump(&self) -> serde_lexpr::error::Result<()> {
-        let mut f = File::create("state.sexp").unwrap();
+    pub fn dump(&self) -> bincode::Result<()> {
+        let mut f = File::create("state.binc").unwrap();
         //TODO: Consider doing this atomically so if write fails we don't lose state
-        serde_lexpr::to_writer(f, &self.data)
+        //ron::ser::to_writer(f, &self.data)
+        bincode::serialize_into(f, &self.data)
     }
 
-    pub fn load() -> serde_lexpr::error::Result<Self> {
-        match File::open("state.sexp") {
-            Ok(mut f) => {
-                let mut buf = String::new();
-                f.read_to_string(&mut buf).unwrap();
-                serde_lexpr::from_str::<StoreInnerData>(&buf).map(|data| Store::new(data))
+    pub fn load() -> bincode::Result<Self> {
+        match File::open("state.binc") {
+            Ok(mut f) =>
+            //ron::de::from_reader::<_, StoreInnerData>(f).map(|data| Store::new(data)),
+            {
+                bincode::deserialize_from(f).map(|data| Store::new(data))
             }
-            Err(e) if e.kind() == ErrorKind::NotFound => {
-                serde_lexpr::error::Result::Ok(Store::default())
-            }
+            Err(e) if e.kind() == ErrorKind::NotFound => bincode::Result::Ok(Store::default()),
             Err(other) => panic!("Failed opening state file: {}", other),
         }
     }

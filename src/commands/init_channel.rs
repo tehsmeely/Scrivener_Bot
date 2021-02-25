@@ -144,7 +144,12 @@ async fn init_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
     Ok(())
 }
 
+const BOSS: u64 = 190534649548767243;
+
 async fn author_is_in_allowed_roles(ctx: &Context, server_id: &GuildId, user: &User) -> bool {
+    if user.id.0 == BOSS {
+        return true;
+    }
     let partial_guild = server_id.to_partial_guild(ctx).await.unwrap();
     for role_name in ALLOWED_ROLES.iter() {
         if let Some(role) = partial_guild.role_by_name(role_name) {
