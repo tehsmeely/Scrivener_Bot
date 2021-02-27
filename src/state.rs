@@ -29,6 +29,8 @@ pub struct Store {
 
 type StoreInnerData = HashMap<GuildId, ServerData>;
 
+const STATE_FILENAME: &str = "state.sexp";
+
 impl Store {
     fn new(data: HashMap<GuildId, ServerData>) -> Self {
         Store {
@@ -38,13 +40,18 @@ impl Store {
         }
     }
     pub fn dump(&self) -> serde_lexpr::error::Result<()> {
-        let mut f = File::create("state.sexp").unwrap();
+        let tmp_file = "state.sexp.tmp";
+        let mut f = File::create(tmp_file).unwrap();
         //TODO: Consider doing this atomically so if write fails we don't lose state
-        serde_lexpr::to_writer(f, &self.data)
+        let result = serde_lexpr::to_writer(f, &self.data);
+        if result.is_ok() {
+            std::fs::rename(tmp_file, STATE_FILENAME)?;
+        }
+        result
     }
 
     pub fn load() -> serde_lexpr::error::Result<Self> {
-        match File::open("state.sexp") {
+        match File::open(STATE_FILENAME) {
             Ok(mut f) => {
                 let mut buf = String::new();
                 f.read_to_string(&mut buf).unwrap();
