@@ -275,7 +275,7 @@ async fn wait_for_image(expecting_path: &Path, timeout: &Duration) -> tokio::io:
     }
     Err(tokio::io::Error::new(
         ErrorKind::Other,
-        "Timed out waiting for file to appear (2s)",
+        format!("Timed out waiting for file to appear ({:.1}s)", timeout.as_secs_f32()),
     ))
 }
 
