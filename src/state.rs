@@ -220,7 +220,7 @@ impl ChannelData {
                 .user(author)
                 .newline()
                 .push_line_safe(format!("Word count: {}", stats.word_count))
-                .push_line_safe(format!("Top words: {}", stats.top_words(5)))
+                .push_line_safe(format!("Top words: {}", stats.top_words(10)))
         });
         final_builder.build()
     }

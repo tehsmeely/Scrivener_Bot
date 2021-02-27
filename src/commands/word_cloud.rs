@@ -262,7 +262,7 @@ async fn wait_for_image(expecting_path: &Path, timeout: &Duration) -> tokio::io:
     //Wait for it to exist for up to [timeout]
     let mut elapsed_time = Duration::new(0, 0);
     let wait_time = Duration::from_millis(300);
-    let tiny_wait = Duration::from_millis(20);
+    let tiny_wait = Duration::from_millis(60);
     while &elapsed_time <= timeout {
         if expecting_path.exists() {
             //Tiny wait to try and account for non-atomic file creation
