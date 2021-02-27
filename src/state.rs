@@ -36,13 +36,14 @@ impl Store {
         Store {
             replay_needed: true,
             queued_messages_until_replay: Vec::new(),
+            initialising_channels: HashSet::new(),
             data,
         }
     }
     pub fn dump(&self) -> serde_lexpr::error::Result<()> {
-        let tmp_file = "state.sexp.tmp";
+        let tmp_file = "state.pickle.tmp";
         let mut f = File::create(tmp_file).unwrap();
-        //TODO: Consider doing this atomically so if write fails we don't lose state
+        serde_pickle::to_writer(&mut f, &self.data, true)
         let result = serde_lexpr::to_writer(f, &self.data);
         if result.is_ok() {
             std::fs::rename(tmp_file, STATE_FILENAME)?;
@@ -50,15 +51,16 @@ impl Store {
         result
     }
 
-    pub fn load() -> serde_lexpr::error::Result<Self> {
+    pub fn load() -> serde_pickle::error::Result<Self> {
         match File::open(STATE_FILENAME) {
-            Ok(mut f) => {
-                let mut buf = String::new();
-                f.read_to_string(&mut buf).unwrap();
-                serde_lexpr::from_str::<StoreInnerData>(&buf).map(|data| Store::new(data))
+            Ok(mut f) =>
+            //ron::de::from_reader::<_, StoreInnerData>(f).map(|data| Store::new(data)),
+            {
+                //bincode::deserialize_from(f).map(|data| Store::new(data))
+                serde_pickle::from_reader(f).map(|data| Store::new(data))
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {
-                serde_lexpr::error::Result::Ok(Store::default())
+                serde_pickle::error::Result::Ok(Store::default())
             }
             Err(other) => panic!("Failed opening state file: {}", other),
         }
