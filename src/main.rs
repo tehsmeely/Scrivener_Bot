@@ -64,6 +64,7 @@ struct Handler {
 impl EventHandler for Handler {
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         println!("Cache built successfully!");
+        set_bot_activity(&ctx).await;
         if !self.tasks_running.load(Ordering::Relaxed) {
             store_replay(&ctx).await;
             let ctx = Arc::new(ctx);
@@ -82,6 +83,21 @@ impl EventHandler for Handler {
     async fn ready(&self, _ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
     }
+}
+
+async fn set_bot_activity(ctx: &Context) {
+    let prefix = {
+        let config_lock = {
+            let data_read = ctx.data.read().await;
+            data_read
+                .get::<GeneralAppConfigData>()
+                .expect("Expected StoryData in TypeMap.")
+                .clone()
+        };
+        let config = config_lock.read().unwrap();
+        config.prefix.clone()
+    };
+    ctx.set_activity(Activity::listening(&prefix)).await;
 }
 
 async fn store_replay(ctx: &Context) {
