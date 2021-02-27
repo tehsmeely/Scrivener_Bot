@@ -9,7 +9,7 @@ use serenity::model::prelude::Channel;
 use serenity::model::user::User;
 use serenity::prelude::TypeMapKey;
 use serenity::utils::MessageBuilder;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, RwLock};
@@ -24,6 +24,7 @@ impl TypeMapKey for StoreData {
 pub struct Store {
     replay_needed: bool,
     queued_messages_until_replay: Vec<(StoryKey, Message)>,
+    pub initialising_channels: HashSet<StoryKey>,
     pub data: StoreInnerData,
 }
 
@@ -40,15 +41,14 @@ impl Store {
             data,
         }
     }
-    pub fn dump(&self) -> serde_lexpr::error::Result<()> {
+    pub fn dump(&self) -> serde_pickle::error::Result<()> {
         let tmp_file = "state.pickle.tmp";
         let mut f = File::create(tmp_file).unwrap();
-        serde_pickle::to_writer(&mut f, &self.data, true)
-        let result = serde_lexpr::to_writer(f, &self.data);
-        if result.is_ok() {
+        let serialise_result = serde_pickle::to_writer(&mut f, &self.data, true);
+        if serialise_result.is_ok() {
             std::fs::rename(tmp_file, STATE_FILENAME)?;
         }
-        result
+        serialise_result
     }
 
     pub fn load() -> serde_pickle::error::Result<Self> {
