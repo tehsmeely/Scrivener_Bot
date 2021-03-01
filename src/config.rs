@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
+use serenity::model::id::UserId;
 
 pub struct GeneralAppConfigData;
 
@@ -20,6 +21,7 @@ impl TypeMapKey for GeneralAppConfigData {
 pub struct GeneralAppConfig {
     pub prefix: String,
     pub wordcloud_config: Option<WordCloudConfig>,
+    pub bot_admin: Option<UserId>,
 }
 
 impl Default for GeneralAppConfig {
@@ -27,6 +29,7 @@ impl Default for GeneralAppConfig {
         Self {
             prefix: String::from("!"),
             wordcloud_config: Some(WordCloudConfig::default()),
+            bot_admin: None,
         }
     }
 }

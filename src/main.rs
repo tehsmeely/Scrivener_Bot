@@ -26,6 +26,7 @@ use commands::server_summary::SERVER_SUMMARY_COMMAND;
 use commands::show_channels::SHOW_CHANNELS_COMMAND;
 use commands::show_stats::SHOW_STATS_COMMAND;
 use commands::word_cloud::GEN_WORDCLOUD_COMMAND;
+use commands::feedback::FEEDBACK_COMMAND;
 
 use crate::config::{GeneralAppConfig, GeneralAppConfigData};
 use crate::state::{Store, StoreData, StoryKey};
@@ -44,7 +45,7 @@ mod stats;
 mod utils;
 
 #[group]
-#[commands(init_channel, show_stats, show_channels, server_summary)]
+#[commands(init_channel, show_stats, show_channels, server_summary, feedback)]
 struct General;
 
 #[group]
